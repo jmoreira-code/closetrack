@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -164,8 +163,11 @@ input[type=checkbox]{width:15px;height:15px;accent-color:var(--blue);cursor:poin
       </div>
     </div>
     <hr class="divider">
+    <div style="background:var(--blue-lt);border-radius:var(--r);padding:10px 12px;font-size:12px;color:var(--blue);margin-bottom:14px;">
+      ℹ️ Clicking <strong>Connect to SharePoint</strong> will open a Microsoft sign-in window. Sign in with your work email to sync data with your team in real time. If the popup is blocked, the app will start in local-only mode.
+    </div>
     <div style="display:flex;gap:10px;">
-      <button class="btn btn-primary" onclick="startDeviceFlow()" style="flex:1;">Get Started</button>
+      <button class="btn btn-primary" onclick="startDeviceFlow()" style="flex:1;">Connect to SharePoint</button>
       <button class="btn" onclick="useDemoMode()" style="flex:1;">Use Demo Mode</button>
     </div>
     <div id="setup-err" style="color:var(--red);font-size:12px;margin-top:10px;display:none;"></div>
@@ -309,7 +311,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   const s=localStorage.getItem('ct_v2');
   if(s){
     const c=JSON.parse(s);
-    Object.assign(APP,{spUrl:c.spUrl||'',period:c.period||'March 2026',isDemo:c.isDemo||false,userName:c.userName||'',userInitials:c.userInitials||'U'});
+    Object.assign(APP,{spUrl:c.spUrl||'',period:c.period||'March 2026',isDemo:c.isDemo||false,userName:c.userName||'',userInitials:c.userInitials||'U',useSharePoint:c.useSharePoint||false,accessToken:c.accessToken||null,tokenExpiry:c.tokenExpiry||0});
     if(APP.isDemo){launchApp();return;}
     if(APP.accessToken&&APP.tokenExpiry>Date.now()){launchApp();return;}
     if(APP.refreshToken){refreshToken().then(ok=>ok?launchApp():showSetup());return;}
@@ -330,16 +332,115 @@ const STORE_KEY = 'ct_data_v1';
 async function startDeviceFlow(){
   const period = document.getElementById('sp-period')?.value?.trim() || 'March 2026';
   const username = document.getElementById('sp-username')?.value?.trim() || 'You';
+  const spUrl = 'https://eventuswh.sharepoint.com/sites/ConsolidatedEntityMonthEndRecons';
   APP.period = period;
+  APP.spUrl = spUrl;
   APP.isDemo = false;
   APP.userName = username;
   APP.userInitials = username.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase() || 'U';
-  saveConfig();
-  launchApp();
+  const btn = document.querySelector('button[onclick="startDeviceFlow()"]');
+  if(btn){ btn.textContent = 'Connecting…'; btn.disabled = true; }
+  const err = document.getElementById('setup-err');
+  err.style.display = 'none';
+  try{
+    // Try MSAL SharePoint connection
+    const msalConfig = {
+      auth:{
+        clientId: CLIENT_ID,
+        authority: 'https://login.microsoftonline.com/common',
+        redirectUri: window.location.href.split('?')[0].split('#')[0]
+      },
+      cache:{ cacheLocation:'localStorage', storeAuthStateInCookie:true }
+    };
+    const msalInstance = new msal.PublicClientApplication(msalConfig);
+    await msalInstance.initialize();
+    APP._msalInstance = msalInstance;
+    // Check for existing account first
+    const accounts = msalInstance.getAllAccounts();
+    let result;
+    if(accounts.length > 0){
+      try{
+        result = await msalInstance.acquireTokenSilent({scopes:['Sites.ReadWrite.All','User.Read'],account:accounts[0]});
+      }catch(silentErr){
+        result = await msalInstance.loginPopup({scopes:['Sites.ReadWrite.All','User.Read']});
+      }
+    } else {
+      result = await msalInstance.loginPopup({scopes:['Sites.ReadWrite.All','User.Read']});
+    }
+    APP.accessToken = result.accessToken;
+    APP.tokenExpiry = Date.now() + 3540000;
+    APP.useSharePoint = true;
+    // Get display name from token
+    try{
+      const me = await graphRequest('GET','/me');
+      APP.userName = me.displayName || username;
+      APP.userInitials = (me.displayName||username).split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+    }catch(e2){}
+    saveConfig();
+    launchApp();
+  }catch(e){
+    // Fall back to local storage mode
+    if(btn){ btn.textContent = 'Get Started'; btn.disabled = false; }
+    if(e.errorCode === 'popup_window_error' || (e.message && e.message.includes('popup'))){
+      err.textContent = 'Sign-in popup was blocked. Starting in local storage mode — your data saves in this browser. Ask IT to whitelist login.microsoftonline.com in Zscaler for real-time SharePoint sync.';
+      err.style.color = 'var(--amber)';
+    } else {
+      err.textContent = 'SharePoint connection failed — starting in local storage mode. ' + e.message;
+      err.style.color = 'var(--amber)';
+    }
+    err.style.display = 'block';
+    APP.useSharePoint = false;
+    saveConfig();
+    setTimeout(launchApp, 2000);
+  }
 }
 
 function cancelAuth(){ useDemoMode(); }
 function copyCode(){}
+
+// GRAPH API
+async function graphRequest(method, endpoint, body=null){
+  if(!APP.accessToken) throw new Error('Not authenticated');
+  const opts = {method, headers:{Authorization:'Bearer '+APP.accessToken,'Content-Type':'application/json'}};
+  if(body) opts.body = JSON.stringify(body);
+  const r = await fetch('https://graph.microsoft.com/v1.0'+endpoint, opts);
+  if(!r.ok){ const e=await r.json().catch(()=>({})); throw new Error(e?.error?.message||'Graph error '+r.status); }
+  if(r.status===204) return null;
+  return r.json();
+}
+
+async function getSiteId(){
+  if(APP.siteId) return APP.siteId;
+  const u = new URL(APP.spUrl);
+  const d = await graphRequest('GET',`/sites/${u.hostname}:${u.pathname}`);
+  APP.siteId = d.id; return d.id;
+}
+
+async function getListId(name){
+  if(!APP.listIds) APP.listIds = {};
+  if(APP.listIds[name]) return APP.listIds[name];
+  const sid = await getSiteId();
+  const d = await graphRequest('GET',`/sites/${sid}/lists/${name}`);
+  APP.listIds[name] = d.id; return d.id;
+}
+
+async function getSpItems(listName){
+  const sid=await getSiteId(), lid=await getListId(listName);
+  const f = encodeURIComponent(`fields/Period eq '${APP.period}'`);
+  const d = await graphRequest('GET',`/sites/${sid}/lists/${lid}/items?expand=fields&$filter=${f}&$top=500`);
+  return (d.value||[]).map(i=>({id:i.id,...i.fields}));
+}
+
+async function createSpItem(listName, fields){
+  const sid=await getSiteId(), lid=await getListId(listName);
+  const d = await graphRequest('POST',`/sites/${sid}/lists/${lid}/items`,{fields});
+  return {id:d.id,...(d.fields||{})};
+}
+
+async function patchSpItem(listName, itemId, fields){
+  const sid=await getSiteId(), lid=await getListId(listName);
+  await graphRequest('PATCH',`/sites/${sid}/lists/${lid}/items/${itemId}/fields`,fields);
+}
 
 function loadFromStorage(){
   try{
@@ -367,24 +468,38 @@ async function loadAll(){
     APP.data={jes:[...DEMO.jes],recons:[...DEMO.recons],checklist:[...DEMO.checklist]};
     return;
   }
+  // Try SharePoint first if connected
+  if(APP.useSharePoint && APP.accessToken){
+    try{
+      const[j,r,c]=await Promise.all([
+        getSpItems('CT_JournalEntries'),
+        getSpItems('CT_Reconciliations'),
+        getSpItems('CT_Checklist')
+      ]);
+      APP.data={jes:j,recons:r,checklist:c};
+      showToast('Live data loaded from SharePoint','success');
+      return;
+    }catch(e){
+      showToast('SharePoint error — using local data: '+e.message,'error');
+      APP.useSharePoint=false;
+    }
+  }
+  // Fall back to local storage
   const stored = loadFromStorage();
-  // If no data stored yet for this period, seed with real Eventus data
   if(!stored.jes.length && !stored.recons.length && !stored.checklist.length){
     const seed = {
-      jes: REAL.jes.filter(j=>j.Period===APP.period).map(j=>({...j})),
-      recons: REAL.recons.filter(r=>r.Period===APP.period).map(r=>({...r})),
-      checklist: REAL.checklist.filter(t=>t.Period===APP.period).map(t=>({...t}))
+      jes: REAL.jes.map(j=>({...j,Period:APP.period})),
+      recons: REAL.recons.map(r=>({...r,Period:APP.period})),
+      checklist: REAL.checklist.map(t=>({...t,Period:APP.period}))
     };
-    // If period doesn't match exactly, use all real data
-    if(!seed.jes.length) seed.jes = REAL.jes.map(j=>({...j,Period:APP.period}));
-    if(!seed.recons.length) seed.recons = REAL.recons.map(r=>({...r,Period:APP.period}));
-    if(!seed.checklist.length) seed.checklist = REAL.checklist.map(t=>({...t,Period:APP.period}));
     APP.data = seed;
     saveToStorage();
   } else {
     APP.data = stored;
   }
 }
+
+const SP_LIST={jes:'CT_JournalEntries',recons:'CT_Reconciliations',checklist:'CT_Checklist'};
 
 async function saveItem(type, fields, editId=null){
   if(APP.isDemo){
@@ -397,6 +512,20 @@ async function saveItem(type, fields, editId=null){
     }
     return;
   }
+  if(APP.useSharePoint && APP.accessToken){
+    try{
+      if(editId!=null){
+        await patchSpItem(SP_LIST[type], editId, fields);
+        const i = APP.data[type].findIndex(x=>x.id==editId);
+        if(i>=0) Object.assign(APP.data[type][i], fields);
+      } else {
+        const created = await createSpItem(SP_LIST[type], {...fields, Period:APP.period});
+        APP.data[type].push(created);
+      }
+      return;
+    }catch(e){ showToast('SharePoint save failed — saved locally: '+e.message,'error'); }
+  }
+  // Local storage fallback
   if(editId!=null){
     const i = APP.data[type].findIndex(x=>x.id==editId);
     if(i>=0) APP.data[type][i] = {...APP.data[type][i],...fields};
@@ -409,7 +538,13 @@ async function saveItem(type, fields, editId=null){
 async function patchLocal(type, id, fields){
   const i = APP.data[type].findIndex(x=>x.id==id);
   if(i>=0) Object.assign(APP.data[type][i], fields);
-  if(!APP.isDemo) saveToStorage();
+  if(!APP.isDemo){
+    if(APP.useSharePoint && APP.accessToken){
+      try{ await patchSpItem(SP_LIST[type], id, fields); return; }
+      catch(e){ showToast('SharePoint update failed — saved locally','error'); }
+    }
+    saveToStorage();
+  }
 }
 
 
@@ -437,13 +572,13 @@ async function refreshAll(){
 }
 
 function saveConfig(){
-  localStorage.setItem('ct_v2',JSON.stringify({spUrl:APP.spUrl,period:APP.period,isDemo:APP.isDemo,userName:APP.userName||'',userInitials:APP.userInitials||'U'}));
+  localStorage.setItem('ct_v2',JSON.stringify({spUrl:APP.spUrl,period:APP.period,isDemo:APP.isDemo,userName:APP.userName||'',userInitials:APP.userInitials||'U',useSharePoint:APP.useSharePoint||false,accessToken:APP.accessToken||null,tokenExpiry:APP.tokenExpiry||0}));
 }
 
 function updatePill(){
   const pill=document.getElementById('sp-pill'),txt=document.getElementById('sp-txt');
   pill.className='sp-pill '+(APP.isDemo?'sp-demo':'sp-live');
-  txt.textContent=APP.isDemo?'Demo mode':'Data saved locally';
+  txt.textContent=APP.isDemo?'Demo mode':APP.useSharePoint?'SharePoint live':'Data saved locally';
 }
 
 // NAV
