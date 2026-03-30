@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CloseTrack — Month-End Close Manager</title>
+<style>
+:root {
+  --blue:#185FA5;--blue-lt:#E6F1FB;--blue-mid:#378ADD;
+  --green:#3B6D11;--green-lt:#EAF3DE;
+  --amber:#854F0B;--amber-lt:#FAEEDA;
+  --red:#A32D2D;--red-lt:#FCEBEB;
+  --gray:#5F5E5A;--gray-lt:#F1EFE8;
+  --teal-lt:#E1F5EE;
+  --border:rgba(0,0,0,0.11);
+  --bg:#f7f6f4;--surface:#fff;
+  --text:#1a1a18;--muted:#6b6a66;--hint:#9b9a96;
+  --r:8px;--rl:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px;}
+button{font-family:inherit;cursor:pointer;}
+input,select,textarea{font-family:inherit;font-size:13px;}
+.app{display:flex;height:100vh;overflow:hidden;}
+.sidebar{width:212px;background:var(--surface);border-right:0.5px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.sb-head{padding:18px 16px 14px;border-bottom:0.5px solid var(--border);}
+.logo{font-size:17px;font-weight:700;color:var(--blue);letter-spacing:-.4px;}
+.period-tag{font-size:11px;color:var(--muted);margin-top:2px;}
+.nav-label{font-size:10px;font-weight:700;color:var(--hint);text-transform:uppercase;letter-spacing:.08em;padding:12px 16px 4px;}
+.nav-item{display:flex;align-items:center;gap:9px;padding:8px 16px;font-size:13px;color:var(--muted);cursor:pointer;border-left:2px solid transparent;transition:all .12s;user-select:none;}
+.nav-item:hover{background:var(--bg);color:var(--text);}
+.nav-item.active{color:var(--blue);background:var(--blue-lt);border-left-color:var(--blue);font-weight:500;}
+.nav-spacer{flex:1;}
+.sb-foot{padding:12px 16px;border-top:0.5px solid var(--border);}
+.user-row{display:flex;align-items:center;gap:8px;}
+.av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;}
+.av-blue{background:#B5D4F4;color:#0C447C;}
+.av-teal{background:#9FE1CB;color:#085041;}
+.av-purple{background:#CECBF6;color:#3C3489;}
+.av-coral{background:#F5C4B3;color:#712B13;}
+.av-green{background:#C0DD97;color:#27500A;}
+.sp-pill{font-size:10px;margin-top:6px;padding:3px 8px;border-radius:20px;display:inline-flex;align-items:center;gap:4px;}
+.sp-live{background:var(--green-lt);color:var(--green);}
+.sp-demo{background:var(--amber-lt);color:var(--amber);}
+.topbar{background:var(--surface);border-bottom:0.5px solid var(--border);padding:11px 22px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.view-title{font-size:15px;font-weight:700;}
+.chip{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:500;}
+.chip-blue{background:var(--blue-lt);color:var(--blue);}
+.prog-wrap{display:flex;align-items:center;gap:8px;}
+.prog-bar{width:130px;height:5px;background:var(--bg);border-radius:3px;overflow:hidden;}
+.prog-fill{height:100%;background:var(--green);border-radius:3px;transition:width .4s ease;}
+.prog-label{font-size:12px;color:var(--muted);}
+.content{flex:1;overflow-y:auto;padding:18px 22px;}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px;}
+.metric{background:var(--bg);border-radius:var(--r);padding:13px 15px;}
+.m-label{font-size:11px;color:var(--muted);margin-bottom:5px;}
+.m-val{font-size:24px;font-weight:700;line-height:1;}
+.m-sub{font-size:11px;color:var(--hint);margin-top:3px;}
+.card{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--rl);margin-bottom:14px;overflow:hidden;}
+.card-head{padding:12px 16px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.card-title{font-size:13px;font-weight:700;}
+.tab-row{display:flex;border-bottom:0.5px solid var(--border);padding:0 16px;overflow-x:auto;}
+.tab{font-size:12px;padding:9px 12px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-.5px;white-space:nowrap;}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue);font-weight:500;}
+.tab:hover:not(.active){color:var(--text);}
+.tw{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;}
+th{text-align:left;padding:8px 16px;font-size:11px;font-weight:700;color:var(--muted);border-bottom:0.5px solid var(--border);white-space:nowrap;text-transform:uppercase;letter-spacing:.04em;}
+td{padding:9px 16px;border-bottom:0.5px solid var(--border);vertical-align:middle;font-size:13px;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#fafaf8;}
+.td-main{font-weight:600;}
+.badge{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap;}
+.b-complete{background:var(--green-lt);color:var(--green);}
+.b-review{background:var(--blue-lt);color:var(--blue);}
+.b-prep{background:var(--amber-lt);color:var(--amber);}
+.b-open{background:var(--gray-lt);color:var(--gray);}
+.b-overdue{background:var(--red-lt);color:var(--red);}
+.btn{font-size:12px;padding:6px 14px;border-radius:var(--r);border:0.5px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;transition:all .12s;}
+.btn:hover{background:var(--bg);}
+.btn-primary{background:var(--blue);color:#fff;border-color:var(--blue);}
+.btn-primary:hover{background:#0C447C;}
+.btn-sm{font-size:11px;padding:4px 10px;}
+.btn-sign{font-size:11px;padding:3px 8px;border-radius:var(--r);border:0.5px solid var(--border);background:none;color:var(--muted);cursor:pointer;}
+.btn-sign:hover{background:var(--bg);}
+.btn-sign.signed{background:var(--green-lt);color:var(--green);border-color:#97C459;cursor:default;}
+.btn-icon{background:none;border:none;padding:4px;color:var(--muted);border-radius:4px;font-size:14px;}
+.btn-icon:hover{background:var(--bg);color:var(--text);}
+.var-ok{color:var(--green);font-weight:600;}
+.var-bad{color:var(--red);font-weight:600;}
+input[type=checkbox]{width:15px;height:15px;accent-color:var(--blue);cursor:pointer;}
+.form-row{margin-bottom:13px;}
+.form-label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600;}
+.form-input{width:100%;padding:8px 10px;border:0.5px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;}
+.form-input:focus{outline:none;border-color:var(--blue-mid);box-shadow:0 0 0 2px rgba(55,138,221,.15);}
+.form-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.form-hint{font-size:11px;color:var(--hint);margin-top:3px;}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.3);display:none;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(2px);}
+.overlay.open{display:flex;}
+.modal{background:var(--surface);border-radius:var(--rl);border:0.5px solid var(--border);width:480px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.12);}
+.modal-head{padding:18px 20px 14px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-title{font-size:15px;font-weight:700;}
+.modal-body{padding:18px 20px;}
+.modal-foot{padding:14px 20px;border-top:0.5px solid var(--border);display:flex;justify-content:flex-end;gap:8px;}
+.fullscreen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);}
+.setup-card{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--rl);width:540px;padding:36px;box-shadow:0 4px 24px rgba(0,0,0,.07);}
+.setup-logo{font-size:22px;font-weight:800;color:var(--blue);margin-bottom:4px;}
+.setup-sub{color:var(--muted);font-size:14px;margin-bottom:28px;}
+.step{display:flex;gap:14px;margin-bottom:20px;align-items:flex-start;}
+.step-num{width:26px;height:26px;border-radius:50%;background:var(--blue);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.step-title{font-size:13px;font-weight:700;margin-bottom:4px;}
+.step-desc{font-size:12px;color:var(--muted);line-height:1.6;}
+.step-desc code{background:var(--bg);padding:1px 5px;border-radius:3px;font-family:monospace;font-size:11px;color:var(--blue);}
+.divider{border:none;border-top:0.5px solid var(--border);margin:24px 0;}
+.info-box{border-radius:var(--r);padding:12px 14px;font-size:12px;margin-bottom:16px;line-height:1.6;}
+.info-blue{background:var(--blue-lt);color:var(--blue);}
+.info-amber{background:var(--amber-lt);color:var(--amber);}
+.info-green{background:var(--green-lt);color:var(--green);}
+.code-block{background:#1a1a18;color:#e8e6e3;font-family:monospace;font-size:22px;padding:16px;border-radius:var(--r);margin:10px 0;letter-spacing:4px;text-align:center;word-break:break-all;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;padding:14px;}
+.cal-day{border:0.5px solid var(--border);border-radius:var(--r);padding:8px;min-height:90px;background:var(--surface);}
+.cal-day.today{border-color:var(--blue);background:var(--blue-lt);}
+.cal-num{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px;}
+.cal-day.today .cal-num{color:var(--blue);}
+.cal-item{font-size:10px;padding:2px 5px;border-radius:3px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.loading{display:flex;align-items:center;justify-content:center;padding:40px;color:var(--muted);font-size:13px;gap:8px;}
+.spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty{text-align:center;padding:36px;color:var(--muted);font-size:13px;}
+.cat-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#185FA5;background:#E6F1FB;padding:7px 16px;border-left:3px solid #185FA5;margin-top:6px;}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--text);color:#fff;padding:10px 16px;border-radius:var(--r);font-size:13px;z-index:999;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none;}
+.toast.show{opacity:1;transform:translateY(0);}
+.toast.success{background:var(--green);}
+.toast.error{background:var(--red);}
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-thumb{background:#d0cfc9;border-radius:3px;}
+</style>
+</head>
+<body>
+
+<!-- SETUP SCREEN -->
+<div id="setup-screen" class="fullscreen" style="display:none;">
+  <div class="setup-card">
+    <div class="setup-logo">CloseTrack</div>
+    <div class="setup-sub">Month-end close management · Eventus Whole Health</div>
+    <div class="info-box info-amber">💡 <strong>Want to explore first?</strong> Click <strong>Use Demo Mode</strong> for instant access with sample data. Connect SharePoint any time from the Settings screen.</div>
+    <div class="step">
+      <div class="step-num">1</div>
+      <div>
+        <div class="step-title">Confirm your SharePoint site URL</div>
+        <input class="form-input" id="sp-url" value="https://eventuswh.sharepoint.com/sites/ConsolidatedEntityMonthEndRecons" style="margin-top:8px;">
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div>
+        <div class="step-title">Enter your close period</div>
+        <input class="form-input" id="sp-period" value="March 2026" style="margin-top:8px;">
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div>
+        <div class="step-title">Sign in — no popup required</div>
+        <div class="step-desc">Click <strong>Connect to SharePoint</strong>. A short code appears on screen. Open <code>microsoft.com/devicelogin</code>, enter the code, sign in with your work account. CloseTrack connects automatically — works from any browser or local file.</div>
+      </div>
+    </div>
+    <hr class="divider">
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-primary" onclick="startDeviceFlow()" style="flex:1;">Connect to SharePoint</button>
+      <button class="btn" onclick="useDemoMode()" style="flex:1;">Use Demo Mode</button>
+    </div>
+    <div id="setup-err" style="color:var(--red);font-size:12px;margin-top:10px;display:none;"></div>
+  </div>
+</div>
+
+<!-- DEVICE CODE SCREEN -->
+<div id="device-screen" class="fullscreen" style="display:none;">
+  <div class="setup-card" style="text-align:center;">
+    <div class="setup-logo" style="margin-bottom:6px;">Almost there</div>
+    <div class="setup-sub">Complete sign-in in about 30 seconds</div>
+    <div class="info-box info-blue" style="text-align:left;"><strong>Step 1 —</strong> Copy this code:</div>
+    <div class="code-block" id="device-code-display">—</div>
+    <button class="btn btn-primary" onclick="copyCode()" style="width:100%;margin-bottom:18px;">📋 Copy code to clipboard</button>
+    <div class="info-box info-blue" style="text-align:left;"><strong>Step 2 —</strong> Open the link below in a new tab and paste the code:</div>
+    <a href="https://microsoft.com/devicelogin" target="_blank" style="display:block;margin-bottom:18px;text-decoration:none;">
+      <button class="btn btn-primary" style="width:100%;">Open microsoft.com/devicelogin ↗</button>
+    </a>
+    <div class="info-box info-amber" style="text-align:left;"><strong>Step 3 —</strong> Sign in with your Eventus work account and click Allow. Then come back here — CloseTrack will connect automatically.</div>
+    <div style="display:flex;align-items:center;gap:10px;justify-content:center;margin-top:14px;">
+      <div class="spinner"></div>
+      <span style="font-size:13px;color:var(--muted);" id="device-status">Waiting for sign-in…</span>
+    </div>
+    <button class="btn" onclick="cancelAuth()" style="margin-top:14px;width:100%;">Cancel — use Demo Mode instead</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="main-app" class="app" style="display:none;">
+  <div class="sidebar">
+    <div class="sb-head">
+      <div class="logo">CloseTrack</div>
+      <div class="period-tag" id="sb-period">Mar 2026</div>
+    </div>
+    <div class="nav-label">Overview</div>
+    <div class="nav-item active" data-view="dashboard" onclick="nav('dashboard',this)">⊞ Dashboard</div>
+    <div class="nav-item" data-view="calendar" onclick="nav('calendar',this)">◻ Close Calendar</div>
+    <div class="nav-label">Work</div>
+    <div class="nav-item" data-view="je" onclick="nav('je',this)">◻ Journal Entries</div>
+    <div class="nav-item" data-view="recon" onclick="nav('recon',this)">◻ Reconciliations</div>
+    <div class="nav-item" data-view="checklist" onclick="nav('checklist',this)">◻ Checklist</div>
+    <div class="nav-label">Admin</div>
+    <div class="nav-item" data-view="settings" onclick="nav('settings',this)">◻ Connection</div>
+    <div class="nav-spacer"></div>
+    <div class="sb-foot">
+      <div class="user-row">
+        <div class="av av-blue" id="user-av">JM</div>
+        <div>
+          <div style="font-size:12px;font-weight:600;" id="user-name">Jennifer Moreira</div>
+          <div style="font-size:11px;color:var(--hint);">Controller</div>
+        </div>
+      </div>
+      <div class="sp-pill sp-demo" id="sp-pill">● <span id="sp-txt">Demo mode</span></div>
+    </div>
+  </div>
+  <div class="main">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span class="view-title" id="view-title">Dashboard</span>
+        <span class="chip chip-blue" id="period-chip">Mar 2026</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="prog-wrap">
+          <span class="prog-label" id="prog-label">—</span>
+          <div class="prog-bar"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+        </div>
+        <button class="btn btn-sm" onclick="refreshAll()">↻ Refresh</button>
+      </div>
+    </div>
+    <div class="content" id="main-content"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+  </div>
+</div>
+
+<!-- ADD/EDIT MODAL -->
+<div class="overlay" id="add-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="modal-title">Add Item</div>
+      <button class="btn-icon" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="modal-save" onclick="submitForm()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const CLIENT_ID='e3b98a3c-3e59-4b0c-ba1a-08f9aafc4f25';
+const SCOPE='https://graph.microsoft.com/Sites.ReadWrite.All offline_access';
+
+const APP={
+  period:'March 2026',spUrl:'',isDemo:false,
+  accessToken:null,refreshToken:null,tokenExpiry:0,
+  siteId:null,listIds:{},
+  currentView:'dashboard',tabs:{},formType:null,editId:null,
+  data:{jes:[],recons:[],checklist:[]},
+  subTaskState:{},
+  pollTimer:null,_deviceCode:null,_deviceInterval:5
+};
+
+const DEMO={
+  jes:[
+    {id:1,Description:'Accrued payroll',Preparer:'JM',Reviewer:'AL',Status:'Complete',DueDate:'Mar 28',IntacctReference:'JE-2026-0312',ReversingIntacctReference:'JE-2026-0318',Recurring:true,Reversing:true,Period:'March 2026'},
+    {id:2,Description:'Prepaid insurance amortization',Preparer:'AL',Reviewer:'JM',Status:'In Review',DueDate:'Mar 28',IntacctReference:'',ReversingIntacctReference:'',Recurring:true,Reversing:false,Period:'March 2026'},
+    {id:3,Description:'Depreciation expense',Preparer:'RK',Reviewer:'JM',Status:'In Prep',DueDate:'Mar 29',IntacctReference:'',ReversingIntacctReference:'',Recurring:true,Reversing:false,Period:'March 2026'},
+    {id:4,Description:'Deferred revenue recognition',Preparer:'GL',Reviewer:'JM',Status:'Open',DueDate:'Mar 30',IntacctReference:'',ReversingIntacctReference:'',Recurring:false,Reversing:false,Period:'March 2026'},
+    {id:5,Description:'Interest expense accrual',Preparer:'AB',Reviewer:'GL',Status:'Overdue',DueDate:'Mar 27',IntacctReference:'',ReversingIntacctReference:'',Recurring:false,Reversing:true,Period:'March 2026'},
+  ],
+  recons:[
+    {id:1,Account:'1010 - Cash - Operating',GLBalance:1423500,SubBalance:1423500,Preparer:'AL',Reviewer:'JM',Status:'Complete',SignedPreparer:true,SignedReviewer:true,Period:'March 2026'},
+    {id:2,Account:'1200 - Accounts Receivable',GLBalance:892340,SubBalance:892340,Preparer:'JM',Reviewer:'GL',Status:'In Review',SignedPreparer:true,SignedReviewer:false,Period:'March 2026'},
+    {id:3,Account:'1500 - Prepaid Expenses',GLBalance:38400,SubBalance:41600,Preparer:'RK',Reviewer:'JM',Status:'In Prep',SignedPreparer:false,SignedReviewer:false,Period:'March 2026'},
+    {id:4,Account:'2000 - Accounts Payable',GLBalance:445200,SubBalance:445200,Preparer:'GL',Reviewer:'JM',Status:'Open',SignedPreparer:false,SignedReviewer:false,Period:'March 2026'},
+    {id:5,Account:'2100 - Accrued Liabilities',GLBalance:142500,SubBalance:142500,Preparer:'JM',Reviewer:'GL',Status:'In Prep',SignedPreparer:true,SignedReviewer:false,Period:'March 2026'},
+    {id:6,Account:'3000 - Common Stock',GLBalance:500000,SubBalance:500000,Preparer:'AL',Reviewer:'JM',Status:'Complete',SignedPreparer:true,SignedReviewer:true,Period:'March 2026'},
+  ],
+  checklist:[
+    {id:1,Task:'Pull TB from Sage Intacct',Category:'Data Pull',Owner:'AL',DueDate:'Mar 27',Status:'Complete',Period:'March 2026',SubTasks:'Export TB from Intacct|Verify all periods closed|Save to SharePoint',Comments:''},
+    {id:2,Task:'Bank statement tie-out',Category:'Cash',Owner:'RK',DueDate:'Mar 27',Status:'Overdue',Period:'March 2026',SubTasks:'Download bank statements|Tie to GL balance|Document outstanding items|Confirm deposits in transit',Comments:'Waiting on First Horizon to send March statement. RK following up 3/27.'},
+    {id:3,Task:'Post payroll JEs',Category:'Payroll',Owner:'JM',DueDate:'Mar 28',Status:'Complete',Period:'March 2026',SubTasks:'Confirm payroll amounts from provider|Post JE in Intacct|Update IntacctReference in CloseTrack'},
+    {id:4,Task:'Revenue recognition review',Category:'Revenue',Owner:'GL',DueDate:'Mar 28',Status:'In Review',Period:'March 2026',SubTasks:'Pull revenue report|Verify recognition schedule|Review deferred balances|Get reviewer sign-off',Comments:'Two contracts flagged for manual review — see email from GL on 3/26.'},
+    {id:5,Task:'Intercompany eliminations',Category:'Consolidation',Owner:'JM',DueDate:'Mar 29',Status:'In Prep',Period:'March 2026',SubTasks:'Run intercompany report|Post elimination entries|Confirm zero balance'},
+    {id:6,Task:'Flux analysis — P&L',Category:'Reporting',Owner:'GL',DueDate:'Mar 30',Status:'Open',Period:'March 2026',SubTasks:'Compare to prior month|Compare to budget|Document variances > 10%'},
+    {id:7,Task:'Flux analysis — Balance Sheet',Category:'Reporting',Owner:'JM',DueDate:'Mar 30',Status:'Open',Period:'March 2026',SubTasks:'Compare to prior month|Investigate unexpected changes|Document explanations'},
+    {id:8,Task:'CFO review package',Category:'Review',Owner:'JM',DueDate:'Mar 31',Status:'Open',Period:'March 2026',SubTasks:'Compile flux analysis|Prepare executive summary|Get controller sign-off|Send to CFO'},
+  ]
+};
+
+// INIT
+window.addEventListener('DOMContentLoaded',()=>{
+  const s=localStorage.getItem('ct_v2');
+  if(s){
+    const c=JSON.parse(s);
+    Object.assign(APP,{spUrl:c.spUrl||'',period:c.period||'March 2026',isDemo:c.isDemo||false,accessToken:c.accessToken||null,refreshToken:c.refreshToken||null,tokenExpiry:c.tokenExpiry||0});
+    if(APP.isDemo){launchApp();return;}
+    if(APP.accessToken&&APP.tokenExpiry>Date.now()){launchApp();return;}
+    if(APP.refreshToken){refreshToken().then(ok=>ok?launchApp():showSetup());return;}
+  }
+  showSetup();
+});
+
+function showSetup(){
+  document.getElementById('setup-screen').style.display='flex';
+  document.getElementById('device-screen').style.display='none';
+  document.getElementById('main-app').style.display='none';
+}
+
+// DEVICE CODE FLOW
+async function startDeviceFlow(){
+  const url=document.getElementById('sp-url').value.trim();
+  const period=document.getElementById('sp-period').value.trim()||'March 2026';
+  const err=document.getElementById('setup-err');
+  err.style.display='none';
+  if(!url){err.textContent='Please enter your SharePoint URL.';err.style.display='block';return;}
+  APP.spUrl=url;APP.period=period;
+  try{
+    const r=await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/devicecode',{
+      method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:`client_id=${CLIENT_ID}&scope=${encodeURIComponent(SCOPE)}`
+    });
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.error_description||'Failed to start sign-in');
+    document.getElementById('setup-screen').style.display='none';
+    document.getElementById('device-screen').style.display='flex';
+    document.getElementById('device-code-display').textContent=d.user_code;
+    APP._deviceCode=d.device_code;
+    APP._deviceInterval=d.interval||5;
+    pollForToken();
+  }catch(e){err.textContent='Error: '+e.message;err.style.display='block';}
+}
+
+async function pollForToken(){
+  try{
+    const r=await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token',{
+      method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:`grant_type=urn:ietf:params:oauth:grant-type:device_code&client_id=${CLIENT_ID}&device_code=${APP._deviceCode}`
+    });
+    const d=await r.json();
+    if(d.access_token){
+      APP.accessToken=d.access_token;
+      APP.refreshToken=d.refresh_token||null;
+      APP.tokenExpiry=Date.now()+(d.expires_in-60)*1000;
+      APP.isDemo=false;saveConfig();
+      document.getElementById('device-status').textContent='Signed in! Loading your data…';
+      setTimeout(launchApp,800);
+    }else if(d.error==='authorization_pending'){
+      APP.pollTimer=setTimeout(pollForToken,APP._deviceInterval*1000);
+    }else if(d.error==='slow_down'){
+      APP._deviceInterval+=5;
+      APP.pollTimer=setTimeout(pollForToken,APP._deviceInterval*1000);
+    }else{
+      document.getElementById('device-status').textContent='Sign-in expired. Returning to setup…';
+      setTimeout(showSetup,2000);
+    }
+  }catch(e){
+    APP.pollTimer=setTimeout(pollForToken,APP._deviceInterval*1000);
+  }
+}
+
+async function refreshToken(){
+  if(!APP.refreshToken)return false;
+  try{
+    const r=await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token',{
+      method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:`grant_type=refresh_token&client_id=${CLIENT_ID}&refresh_token=${APP.refreshToken}&scope=${encodeURIComponent(SCOPE)}`
+    });
+    const d=await r.json();
+    if(d.access_token){
+      APP.accessToken=d.access_token;APP.refreshToken=d.refresh_token||APP.refreshToken;
+      APP.tokenExpiry=Date.now()+(d.expires_in-60)*1000;saveConfig();return true;
+    }
+  }catch(e){}
+  return false;
+}
+
+function cancelAuth(){clearTimeout(APP.pollTimer);useDemoMode();}
+function copyCode(){navigator.clipboard.writeText(document.getElementById('device-code-display').textContent).then(()=>showToast('Code copied!','success'));}
+
+// GRAPH API
+async function graph(method,endpoint,body=null){
+  if(!APP.accessToken)throw new Error('Not authenticated');
+  if(APP.tokenExpiry<Date.now()){const ok=await refreshToken();if(!ok){showSetup();throw new Error('Session expired');}}
+  const opts={method,headers:{Authorization:'Bearer '+APP.accessToken,'Content-Type':'application/json'}};
+  if(body)opts.body=JSON.stringify(body);
+  const r=await fetch('https://graph.microsoft.com/v1.0'+endpoint,opts);
+  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e?.error?.message||'Graph error '+r.status);}
+  if(r.status===204)return null;
+  return r.json();
+}
+
+async function getSiteId(){
+  if(APP.siteId)return APP.siteId;
+  const u=new URL(APP.spUrl);
+  const d=await graph('GET',`/sites/${u.hostname}:${u.pathname}`);
+  APP.siteId=d.id;return d.id;
+}
+
+async function getListId(name){
+  if(APP.listIds[name])return APP.listIds[name];
+  const sid=await getSiteId();
+  const d=await graph('GET',`/sites/${sid}/lists/${name}`);
+  APP.listIds[name]=d.id;return d.id;
+}
+
+async function getItems(listName){
+  const sid=await getSiteId(),lid=await getListId(listName);
+  const f=encodeURIComponent(`fields/Period eq '${APP.period}'`);
+  const d=await graph('GET',`/sites/${sid}/lists/${lid}/items?expand=fields&$filter=${f}&$top=500`);
+  return(d.value||[]).map(i=>({id:i.id,...i.fields}));
+}
+
+async function createItem(listName,fields){
+  const sid=await getSiteId(),lid=await getListId(listName);
+  const d=await graph('POST',`/sites/${sid}/lists/${lid}/items`,{fields});
+  return{id:d.id,...(d.fields||{})};
+}
+
+async function patchGraph(listName,itemId,fields){
+  const sid=await getSiteId(),lid=await getListId(listName);
+  await graph('PATCH',`/sites/${sid}/lists/${lid}/items/${itemId}/fields`,fields);
+}
+
+// DATA LAYER
+const LIST={jes:'CT_JournalEntries',recons:'CT_Reconciliations',checklist:'CT_Checklist'};
+
+async function loadAll(){
+  if(APP.isDemo){APP.data={jes:[...DEMO.jes],recons:[...DEMO.recons],checklist:[...DEMO.checklist]};return;}
+  try{
+    const[j,r,c]=await Promise.all([getItems(LIST.jes),getItems(LIST.recons),getItems(LIST.checklist)]);
+    APP.data={jes:j,recons:r,checklist:c};
+  }catch(e){
+    showToast('SharePoint error: '+e.message,'error');
+    APP.data={jes:[...DEMO.jes],recons:[...DEMO.recons],checklist:[...DEMO.checklist]};
+  }
+}
+
+async function saveItem(type,fields,editId=null){
+  if(APP.isDemo){
+    const list=APP.data[type];
+    if(editId!=null){const i=list.findIndex(x=>x.id==editId);if(i>=0)list[i]={...list[i],...fields};}
+    else list.push({id:Date.now(),...fields});
+    return;
+  }
+  if(editId){
+    await patchGraph(LIST[type],editId,fields);
+    const i=APP.data[type].findIndex(x=>x.id==editId);
+    if(i>=0)Object.assign(APP.data[type][i],fields);
+  }else{
+    const created=await createItem(LIST[type],{...fields,Period:APP.period});
+    APP.data[type].push(created);
+  }
+}
+
+async function patchLocal(type,id,fields){
+  const i=APP.data[type].findIndex(x=>x.id==id);
+  if(i>=0)Object.assign(APP.data[type][i],fields);
+  if(!APP.isDemo)await patchGraph(LIST[type],id,fields);
+}
+
+// APP LAUNCH
+function useDemoMode(){
+  clearTimeout(APP.pollTimer);APP.isDemo=true;
+  APP.period=document.getElementById('sp-period')?.value?.trim()||'March 2026';
+  saveConfig();launchApp();
+}
+
+async function launchApp(){
+  document.getElementById('setup-screen').style.display='none';
+  document.getElementById('device-screen').style.display='none';
+  document.getElementById('main-app').style.display='flex';
+  updatePill();
+  const sh=APP.period.replace('January','Jan').replace('February','Feb').replace('March','Mar').replace('April','Apr').replace('May','May').replace('June','Jun').replace('July','Jul').replace('August','Aug').replace('September','Sep').replace('October','Oct').replace('November','Nov').replace('December','Dec');
+  document.getElementById('sb-period').textContent=sh;
+  document.getElementById('period-chip').textContent=sh;
+  await refreshAll();
+}
+
+async function refreshAll(){
+  document.getElementById('main-content').innerHTML='<div class="loading"><div class="spinner"></div> Loading…</div>';
+  await loadAll();updateProgress();render();
+}
+
+function saveConfig(){
+  localStorage.setItem('ct_v2',JSON.stringify({spUrl:APP.spUrl,period:APP.period,isDemo:APP.isDemo,accessToken:APP.accessToken,refreshToken:APP.refreshToken,tokenExpiry:APP.tokenExpiry}));
+}
+
+function updatePill(){
+  const pill=document.getElementById('sp-pill'),txt=document.getElementById('sp-txt');
+  pill.className='sp-pill '+(APP.isDemo?'sp-demo':'sp-live');
+  txt.textContent=APP.isDemo?'Demo mode':'SharePoint live';
+}
+
+// NAV
+function nav(v,el){
+  APP.currentView=v;
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  el.classList.add('active');
+  const T={dashboard:'Dashboard',calendar:'Close Calendar',je:'Journal Entries',recon:'Account Reconciliations',checklist:'Close Checklist',settings:'Connection Settings'};
+  document.getElementById('view-title').textContent=T[v]||v;
+  render();
+}
+
+function render(){
+  const c=document.getElementById('main-content'),v=APP.currentView;
+  if(v==='dashboard')renderDashboard(c);
+  else if(v==='je')renderJE(c);
+  else if(v==='recon')renderRecon(c);
+  else if(v==='checklist')renderChecklist(c);
+  else if(v==='calendar')renderCalendar(c);
+  else if(v==='settings')renderSettings(c);
+}
+
+function updateProgress(){
+  const all=[...APP.data.jes,...APP.data.recons,...APP.data.checklist];
+  const done=all.filter(x=>x.Status==='Complete').length;
+  const pct=all.length?Math.round(done/all.length*100):0;
+  document.getElementById('prog-fill').style.width=pct+'%';
+  document.getElementById('prog-label').textContent=pct+'% complete';
+}
+
+// HELPERS
+const fmt=n=>'$'+(n||0).toLocaleString();
+const avC={JM:'av-blue',AL:'av-teal',GL:'av-purple',RK:'av-coral',AB:'av-green'};
+const av=n=>`<div class="av ${avC[n]||'av-blue'}" title="${n}" style="width:24px;height:24px;font-size:10px;">${n}</div>`;
+const avMulti=owners=>{if(!owners)return'';return owners.split(',').map(o=>o.trim()).filter(Boolean).map(o=>av(o)).join('<div style="width:2px;"></div>');};
+function badge(s){const m={'Complete':['b-complete','✓ Complete'],'In Review':['b-review','In Review'],'In Prep':['b-prep','In Prep'],'Open':['b-open','Open'],'Overdue':['b-overdue','Overdue']};const[c,l]=m[s]||['b-open',s];return`<span class="badge ${c}">${l}</span>`;}
+function calBg(s){return{'Complete':'#EAF3DE','In Review':'#E6F1FB','In Prep':'#FAEEDA','Open':'#F1EFE8','Overdue':'#FCEBEB'}[s]||'#F1EFE8';}
+function calFg(s){return{'Complete':'#3B6D11','In Review':'#185FA5','In Prep':'#854F0B','Open':'#5F5E5A','Overdue':'#A32D2D'}[s]||'#5F5E5A';}
+
+// VIEWS
+function renderDashboard(c){
+  const all=[...APP.data.jes,...APP.data.recons,...APP.data.checklist];
+  const done=all.filter(x=>x.Status==='Complete').length;
+  const overdue=all.filter(x=>x.Status==='Overdue').length;
+  const inReview=[...APP.data.jes,...APP.data.recons].filter(x=>x.Status==='In Review').length;
+  const variances=APP.data.recons.filter(r=>Math.abs((r.GLBalance||0)-(r.SubBalance||0))>0).length;
+  const missingRef=APP.data.jes.filter(j=>j.Status==='Complete'&&!j.IntacctReference).length;
+  c.innerHTML=`
+  <div class="metrics">
+    <div class="metric"><div class="m-label">Items complete</div><div class="m-val" style="color:var(--green)">${done}/${all.length}</div><div class="m-sub">${all.length-done} remaining</div></div>
+    <div class="metric"><div class="m-label">Overdue</div><div class="m-val" style="color:${overdue>0?'var(--red)':'var(--green)'}">${overdue}</div><div class="m-sub">Need attention</div></div>
+    <div class="metric"><div class="m-label">Pending review</div><div class="m-val" style="color:var(--blue)">${inReview}</div><div class="m-sub">Awaiting sign-off</div></div>
+    <div class="metric"><div class="m-label">Recon variances</div><div class="m-val" style="color:${variances>0?'var(--amber)':'var(--green)'}">${variances}</div><div class="m-sub">${variances>0?'Investigate':'All balanced'}</div></div>
+  </div>
+  ${missingRef>0?`<div class="info-box info-amber" style="margin-bottom:14px;">⚠️ <strong>${missingRef} completed JE${missingRef>1?'s':''}</strong> missing Intacct Reference. <span style="cursor:pointer;text-decoration:underline;" onclick="nav('je',document.querySelector('[data-view=je]'))">View →</span></div>`:''}
+  <div class="card">
+    <div class="card-head"><span class="card-title">Journal entries</span><button class="btn btn-sm" onclick="nav('je',document.querySelector('[data-view=je]'))">View all →</button></div>
+    <div class="tw"><table><thead><tr><th>Description</th><th>Amount</th><th>Intacct Ref</th><th>Preparer</th><th>Status</th></tr></thead>
+    <tbody>${APP.data.jes.slice(0,4).map(j=>`<tr><td class="td-main">${j.Description||''}</td><td>${fmt(j.Amount)}</td><td style="font-size:12px;color:${j.IntacctReference?'var(--green)':'var(--hint)'};">${j.IntacctReference||'—'}</td><td>${av(j.Preparer||'')}</td><td>${badge(j.Status)}</td></tr>`).join('')}</tbody></table></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><span class="card-title">Reconciliation variances</span><button class="btn btn-sm" onclick="nav('recon',document.querySelector('[data-view=recon]'))">View all →</button></div>
+    ${APP.data.recons.some(r=>Math.abs((r.GLBalance||0)-(r.SubBalance||0))>0)
+      ?`<div class="tw"><table><thead><tr><th>Account</th><th>GL Balance</th><th>Sub Balance</th><th>Variance</th></tr></thead><tbody>${APP.data.recons.filter(r=>Math.abs((r.GLBalance||0)-(r.SubBalance||0))>0).map(r=>{const v=(r.GLBalance||0)-(r.SubBalance||0);return`<tr><td class="td-main">${r.Account}</td><td>${fmt(r.GLBalance)}</td><td>${fmt(r.SubBalance)}</td><td class="var-bad">${fmt(Math.abs(v))} ${v>0?'over':'short'}</td></tr>`;}).join('')}</tbody></table></div>`
+      :'<div class="empty">✓ All accounts balanced</div>'}
+  </div>
+  <div class="card">
+    <div class="card-head"><span class="card-title">Overdue items</span></div>
+    ${overdue>0
+      ?`<div class="tw"><table><thead><tr><th>Item</th><th>Type</th><th>Owner</th><th>Due</th></tr></thead><tbody>${[...APP.data.jes.filter(j=>j.Status==='Overdue').map(j=>({n:j.Description,t:'Journal Entry',o:j.Preparer,d:j.DueDate})),...APP.data.checklist.filter(t=>t.Status==='Overdue').map(t=>({n:t.Task,t:'Checklist',o:t.Owner,d:t.DueDate}))].map(i=>`<tr><td class="td-main">${i.n}</td><td style="font-size:12px;color:var(--muted);">${i.t}</td><td>${av(i.o||'')}</td><td><span class="badge b-overdue">${i.d}</span></td></tr>`).join('')}</tbody></table></div>`
+      :'<div class="empty">🎉 No overdue items</div>'}
+  </div>`;
+}
+
+function renderJE(c){
+  const tab=APP.tabs.je||'all';
+  let items=APP.data.jes;
+  if(tab==='mine')items=items.filter(j=>j.Preparer==='JM');
+  if(tab==='review')items=items.filter(j=>j.Status==='In Review');
+  if(tab==='overdue')items=items.filter(j=>j.Status==='Overdue');
+  if(tab==='noref')items=items.filter(j=>j.Status==='Complete'&&!j.IntacctReference);
+  if(tab==='recurring')items=items.filter(j=>j.Recurring);
+  if(tab==='reversing')items=items.filter(j=>j.Reversing);
+  const recurCount=APP.data.jes.filter(j=>j.Recurring).length;
+  const revCount=APP.data.jes.filter(j=>j.Reversing).length;
+  c.innerHTML=`<div class="card">
+    <div class="card-head"><span class="card-title">Journal entries</span><button class="btn btn-sm btn-primary" onclick="openModal('jes')">+ Add entry</button></div>
+    <div class="tab-row">${[['all','All ('+APP.data.jes.length+')'],['mine','My items'],['review','In Review'],['overdue','Overdue'],['noref','Missing Ref'],['recurring','↻ Recurring ('+recurCount+')'],['reversing','⇄ Reversing ('+revCount+')']].map(([k,l])=>`<div class="tab ${tab===k?'active':''}" onclick="setTab('je','${k}')">${l}</div>`).join('')}</div>
+    <div class="tw"><table><thead><tr><th>Description</th><th>Intacct Reference</th><th>Preparer</th><th>Reviewer</th><th>Due</th><th>Status</th><th></th></tr></thead>
+    <tbody>${items.length?items.map(j=>`<tr>
+      <td class="td-main">${j.Description||''}
+        <div style="display:flex;gap:4px;margin-top:3px;">
+          ${j.Recurring?'<span style="font-size:10px;background:#E1F5EE;color:#0F6E56;padding:1px 6px;border-radius:10px;font-weight:500;">↻ Recurring</span>':''}
+          ${j.Reversing?'<span style="font-size:10px;background:#EEEDFE;color:#3C3489;padding:1px 6px;border-radius:10px;font-weight:500;">⇄ Reversing</span>':''}
+        </div>
+      </td>
+      <td style="font-size:12px;color:${j.IntacctReference?'var(--green)':'var(--hint)'};">${j.IntacctReference||'—'}
+        ${j.Reversing&&j.ReversingIntacctReference?`<div style="font-size:11px;color:#3C3489;margin-top:2px;">Rev: ${j.ReversingIntacctReference}</div>`:''}
+        ${j.Reversing&&!j.ReversingIntacctReference&&j.IntacctReference?'<div style="font-size:11px;color:var(--hint);margin-top:2px;">Rev: pending</div>':''}
+      </td>
+      <td>${av(j.Preparer||'')}</td>
+      <td>${av(j.Reviewer||'')}</td>
+      <td style="font-size:12px;color:var(--muted);">${j.DueDate||''}</td>
+      <td>${badge(j.Status)}</td>
+      <td><button class="btn-icon" onclick="openModal('jes',${JSON.stringify(j.id)})">✎</button></td>
+    </tr>`).join(''):'<tr><td colspan="7"><div class="empty">No entries in this view</div></td></tr>'}</tbody>
+    </table></div></div>`;
+}
+
+function renderRecon(c){
+  const tab=APP.tabs.recon||'all';
+  let items=APP.data.recons;
+  if(tab==='variances')items=items.filter(r=>Math.abs((r.GLBalance||0)-(r.SubBalance||0))>0);
+  if(tab==='pending')items=items.filter(r=>!r.SignedReviewer);
+  c.innerHTML=`<div class="card">
+    <div class="card-head"><span class="card-title">Account reconciliations</span><button class="btn btn-sm btn-primary" onclick="openModal('recons')">+ Add recon</button></div>
+    <div class="tab-row">${[['all','All ('+APP.data.recons.length+')'],['variances','Variances'],['pending','Pending sign-off']].map(([k,l])=>`<div class="tab ${tab===k?'active':''}" onclick="setTab('recon','${k}')">${l}</div>`).join('')}</div>
+    <div class="tw"><table><thead><tr><th>Account</th><th>GL Balance</th><th>Sub Balance</th><th>Variance</th><th>Preparer</th><th>Reviewer</th><th>Status</th><th>Sign-off</th><th></th></tr></thead>
+    <tbody>${items.map(r=>{const v=(r.GLBalance||0)-(r.SubBalance||0);return`<tr><td class="td-main" style="max-width:170px;">${r.Account||''}</td><td style="font-size:12px;">${fmt(r.GLBalance)}</td><td style="font-size:12px;">${fmt(r.SubBalance)}</td><td class="${v===0?'var-ok':'var-bad'}">${v===0?'—':fmt(Math.abs(v))}</td><td>${av(r.Preparer||'')}</td><td>${av(r.Reviewer||'')}</td><td>${badge(r.Status)}</td><td style="display:flex;gap:4px;align-items:center;padding:6px 16px;"><button class="btn-sign ${r.SignedPreparer?'signed':''}" onclick="signOff(${JSON.stringify(r.id)},'P')">${r.SignedPreparer?'✓ Prep':'Sign P'}</button><button class="btn-sign ${r.SignedReviewer?'signed':''}" onclick="signOff(${JSON.stringify(r.id)},'R')">${r.SignedReviewer?'✓ Rev':'Sign R'}</button></td><td><button class="btn-icon" onclick="openModal('recons',${JSON.stringify(r.id)})">✎</button></td></tr>`;}).join('')}</tbody>
+    </table></div></div>`;
+}
+
+function renderChecklist(c){
+  const tab=APP.tabs.checklist||'all';
+  let items=APP.data.checklist;
+  if(tab==='mine')items=items.filter(t=>t.Owner==='JM');
+  if(tab==='overdue')items=items.filter(t=>t.Status==='Overdue');
+  const cats=[...new Set(items.map(t=>t.Category||'General'))];
+  c.innerHTML=`<div class="card">
+    <div class="card-head"><span class="card-title">Close checklist</span><button class="btn btn-sm btn-primary" onclick="openModal('checklist')">+ Add task</button></div>
+    <div class="tab-row">${[['all','All ('+APP.data.checklist.length+')'],['mine','My tasks'],['overdue','Overdue']].map(([k,l])=>`<div class="tab ${tab===k?'active':''}" onclick="setTab('checklist','${k}')">${l}</div>`).join('')}</div>
+    ${cats.map(cat=>{const ci=items.filter(t=>(t.Category||'General')===cat);return`<div class="cat-label">${cat}</div><table><tbody>${ci.map(t=>{
+      const subs=(t.SubTasks||'').split('|').map(s=>s.trim()).filter(Boolean);
+      const subsDone=APP.subTaskState[t.id]||{};
+      const subCount=subs.length;
+      const doneCount=Object.values(subsDone).filter(Boolean).length;
+      const subHtml=subs.length?`<tr><td></td><td colspan="4" style="padding:2px 8px 10px 8px;">
+        <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px;">
+          ${subs.map((s,i)=>`<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:${subsDone[i]?'var(--muted)':'var(--text)'};cursor:pointer;">
+            <input type="checkbox" ${subsDone[i]?'checked':''} onchange="toggleSubTask(${t.id},${i})" style="width:13px;height:13px;accent-color:var(--blue);flex-shrink:0;">
+            <span style="${subsDone[i]?'text-decoration:line-through;color:var(--muted);':''}">${s}</span>
+          </label>`).join('')}
+        </div>
+      </td></tr>`:'';
+      return`<tr style="border-bottom:${subs.length?'none':''}">
+        <td style="width:30px;vertical-align:top;padding-top:10px;"><input type="checkbox" ${t.Status==='Complete'?'checked':''} onchange="toggleTask(${JSON.stringify(t.id)})"></td>
+        <td style="${t.Status==='Complete'?'text-decoration:line-through;color:var(--muted);':''}vertical-align:top;">
+          <div style="font-size:13px;font-weight:500;padding-top:2px;">${t.Task||''}</div>
+          ${subCount?`<div style="font-size:11px;color:var(--muted);margin-top:2px;">${doneCount}/${subCount} subtasks complete</div>`:''}
+        </td>
+        <td style="vertical-align:top;padding-top:8px;"><div style="display:flex;align-items:center;">${avMulti(t.Owner||'')}</div></td>
+        <td style="font-size:12px;color:var(--muted);vertical-align:top;padding-top:10px;">${t.DueDate||''}</td>
+        <td style="vertical-align:top;padding-top:7px;">${badge(t.Status)}</td>
+        <td style="vertical-align:top;padding-top:7px;"><button class="btn-icon" onclick="openModal('checklist',${JSON.stringify(t.id)})">✎</button></td>
+      </tr>${subHtml}
+      ${t.Comments?`<tr style="border-bottom:0.5px solid var(--border);"><td></td><td colspan="5" style="padding:0 8px 10px 8px;"><div style="display:flex;align-items:flex-start;gap:6px;font-size:12px;color:#185FA5;font-style:italic;"><span style="flex-shrink:0;font-style:normal;">💬</span><span>${t.Comments}</span></div></td></tr>`:''}
+      `;}).join('')}</tbody></table>`;}).join('')}
+    ${items.length===0?'<div class="empty">No tasks in this view</div>':''}
+  </div>`;
+}
+
+function renderCalendar(c){
+  const days=[25,26,27,28,29,30,31],byDay={};
+  [...APP.data.jes.map(j=>({n:j.Description,s:j.Status,d:parseInt((j.DueDate||'').split(' ')[1])||0})),...APP.data.checklist.map(t=>({n:t.Task,s:t.Status,d:parseInt((t.DueDate||'').split(' ')[1])||0}))]
+  .forEach(i=>{if(!byDay[i.d])byDay[i.d]=[];byDay[i.d].push(i);});
+  c.innerHTML=`<div class="card"><div class="card-head"><span class="card-title">Close calendar — ${APP.period}</span></div>
+  <div class="cal-grid">${days.map(d=>{const today=d===24,its=byDay[d]||[];return`<div class="cal-day ${today?'today':''}"><div class="cal-num">Mar ${d}${today?' · Today':''}</div>${its.map(i=>`<div class="cal-item" style="background:${calBg(i.s)};color:${calFg(i.s)};" title="${i.n}">${i.n.length>20?i.n.slice(0,20)+'…':i.n}</div>`).join('')}</div>`;}).join('')}</div></div>`;
+}
+
+function renderSettings(c){
+  c.innerHTML=`<div class="card"><div class="card-head"><span class="card-title">Connection settings</span></div>
+  <div style="padding:20px;">
+    <div class="form-row"><div class="form-label">Current status</div>
+      <span class="badge ${APP.isDemo?'b-overdue':'b-complete'}">${APP.isDemo?'Demo mode — data not saved to SharePoint':'Connected to SharePoint'}</span>
+      ${!APP.isDemo?`<div style="font-size:12px;color:var(--muted);margin-top:6px;">${APP.spUrl}</div>`:''}
+    </div>
+    <div class="form-row"><label class="form-label">SharePoint site URL</label><input class="form-input" id="cfg-url" value="${APP.spUrl||'https://eventuswh.sharepoint.com/sites/ConsolidatedEntityMonthEndRecons'}"></div>
+    <div class="form-row"><label class="form-label">Close period</label><input class="form-input" id="cfg-period" value="${APP.period}"></div>
+    <div style="display:flex;gap:10px;margin-top:4px;">
+      <button class="btn btn-primary" onclick="reconnect()">Reconnect to SharePoint</button>
+      <button class="btn" onclick="switchDemo()">Switch to Demo Mode</button>
+    </div>
+    <div class="info-box info-blue" style="margin-top:20px;">
+      <strong>DataBlend integration (coming soon)</strong> — When you're ready, DataBlend will pull GL balances from Sage Intacct and write them directly into your CT_Reconciliations list each month. Your team opens CloseTrack and balances are already there — no manual entry needed.
+    </div>
+  </div></div>`;
+}
+
+// ACTIONS
+function setTab(view,tab){APP.tabs[view]=tab;render();}
+
+async function toggleTask(id){
+  const t=APP.data.checklist.find(x=>x.id==id);
+  if(!t)return;
+  const ns=t.Status==='Complete'?'Open':'Complete';
+  try{await patchLocal('checklist',id,{Status:ns});updateProgress();render();showToast(ns==='Complete'?'Task complete':'Task reopened','success');}
+  catch(e){showToast('Error: '+e.message,'error');}
+}
+
+function toggleSubTask(taskId,subIdx){
+  if(!APP.subTaskState[taskId])APP.subTaskState[taskId]={};
+  APP.subTaskState[taskId][subIdx]=!APP.subTaskState[taskId][subIdx];
+  // Auto-complete parent task if all subtasks done
+  const t=APP.data.checklist.find(x=>x.id==taskId);
+  if(t){
+    const subs=(t.SubTasks||'').split('|').map(s=>s.trim()).filter(Boolean);
+    const doneCount=Object.values(APP.subTaskState[taskId]).filter(Boolean).length;
+    if(subs.length>0&&doneCount===subs.length&&t.Status!=='Complete'){
+      patchLocal('checklist',taskId,{Status:'Complete'}).then(()=>{updateProgress();render();showToast('All subtasks done — task marked complete','success');});
+      return;
+    }
+  }
+  render();
+}
+
+
+async function signOff(id,role){
+  const r=APP.data.recons.find(x=>x.id==id);
+  if(!r)return;
+  if(role==='R'&&!r.SignedPreparer){showToast('Preparer must sign off first','error');return;}
+  const fields=role==='P'?{SignedPreparer:true}:{SignedReviewer:true,Status:'Complete'};
+  try{await patchLocal('recons',id,fields);updateProgress();render();showToast(role==='P'?'Preparer sign-off recorded':'Recon complete ✓','success');}
+  catch(e){showToast('Error: '+e.message,'error');}
+}
+
+function reconnect(){
+  APP.spUrl=document.getElementById('cfg-url')?.value?.trim()||APP.spUrl;
+  APP.period=document.getElementById('cfg-period')?.value?.trim()||APP.period;
+  APP.accessToken=null;APP.refreshToken=null;APP.siteId=null;APP.listIds={};
+  saveConfig();
+  document.getElementById('main-app').style.display='none';
+  document.getElementById('setup-screen').style.display='flex';
+  if(document.getElementById('sp-url'))document.getElementById('sp-url').value=APP.spUrl;
+  if(document.getElementById('sp-period'))document.getElementById('sp-period').value=APP.period;
+}
+
+function switchDemo(){APP.isDemo=true;APP.period=document.getElementById('cfg-period')?.value?.trim()||APP.period;saveConfig();updatePill();refreshAll();}
+
+// FORMS
+function openModal(type,editId=null){
+  APP.formType=type;APP.editId=editId;
+  const data=editId!=null?APP.data[type].find(x=>x.id==editId):null;
+  const v=f=>data?(data[f]??''):'';
+  const titles={jes:'Journal Entry',recons:'Reconciliation',checklist:'Checklist Task'};
+  document.getElementById('modal-title').textContent=(editId?'Edit ':'Add ')+titles[type];
+  const b=document.getElementById('modal-body');
+  const so=['Open','In Prep','In Review','Complete','Overdue'].map(s=>`<option ${v('Status')===s?'selected':''}>${s}</option>`).join('');
+  if(type==='jes')b.innerHTML=`
+    <div class="form-row"><label class="form-label">Description *</label><input class="form-input" id="f-desc" value="${v('Description')}" placeholder="e.g. Accrued payroll"></div>
+    <div class="form-2">
+      <div class="form-row"><label class="form-label">Preparer (initials)</label><input class="form-input" id="f-prep" value="${v('Preparer')}" placeholder="JM" maxlength="4"></div>
+      <div class="form-row"><label class="form-label">Reviewer (initials)</label><input class="form-input" id="f-rev" value="${v('Reviewer')}" placeholder="AL" maxlength="4"></div>
+    </div>
+    <div class="form-2">
+      <div class="form-row"><label class="form-label">Due Date</label><input class="form-input" id="f-due" value="${v('DueDate')}" placeholder="Mar 28"></div>
+      <div class="form-row"><label class="form-label">Status</label><select class="form-input" id="f-status">${so}</select></div>
+    </div>
+    <div class="form-2">
+      <div class="form-row"><label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="f-recurring" ${v('Recurring')?'checked':''} style="width:15px;height:15px;accent-color:var(--teal);"> <span>Recurring entry <span style="font-size:11px;color:var(--muted);font-weight:400;">— repeats each period</span></span></label></div>
+      <div class="form-row"><label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="f-reversing" ${v('Reversing')?'checked':''} onchange="toggleReversingField()" style="width:15px;height:15px;accent-color:#534AB7;"> <span>Reversing entry <span style="font-size:11px;color:var(--muted);font-weight:400;">— reverses next period</span></span></label></div>
+    </div>
+    <div class="form-row"><label class="form-label">Intacct Reference <span style="font-size:11px;color:var(--muted);font-weight:400;">— original JE</span></label><input class="form-input" id="f-ref" value="${v('IntacctReference')}" placeholder="e.g. JE-2026-0312"><div class="form-hint">Paste the JE number from Sage Intacct after posting</div></div>
+    <div class="form-row" id="f-rev-ref-row" style="display:${v('Reversing')?'block':'none'}"><label class="form-label">Reversing Intacct Reference <span style="font-size:11px;color:#534AB7;font-weight:400;">— reversal JE</span></label><input class="form-input" id="f-rev-ref" value="${v('ReversingIntacctReference')}" placeholder="e.g. JE-2026-0318"><div class="form-hint">Paste the reversal JE number once it posts in the next period</div></div>`;
+  else if(type==='recons')b.innerHTML=`
+    <div class="form-row"><label class="form-label">Account *</label><input class="form-input" id="f-acct" value="${v('Account')}" placeholder="e.g. 1010 - Cash"></div>
+    <div class="form-2">
+      <div class="form-row"><label class="form-label">GL Balance</label><input class="form-input" id="f-gl" type="number" value="${v('GLBalance')||0}"></div>
+      <div class="form-row"><label class="form-label">Sub-ledger Balance</label><input class="form-input" id="f-sub" type="number" value="${v('SubBalance')||0}"></div>
+    </div>
+    <div class="form-2">
+      <div class="form-row"><label class="form-label">Preparer</label><input class="form-input" id="f-prep" value="${v('Preparer')}" placeholder="JM" maxlength="4"></div>
+      <div class="form-row"><label class="form-label">Reviewer</label><input class="form-input" id="f-rev" value="${v('Reviewer')}" placeholder="AL" maxlength="4"></div>
+    </div>
+    <div class="form-row"><label class="form-label">Status</label><select class="form-input" id="f-status">${so}</select></div>`;
+  else b.innerHTML=`
+    <div class="form-row"><label class="form-label">Task *</label><input class="form-input" id="f-task" value="${v('Task')}" placeholder="e.g. Revenue recognition review"></div>
+    <div class="form-2">
+      <div class="form-row"><label class="form-label">Category</label><input class="form-input" id="f-cat" value="${v('Category')}" placeholder="e.g. Reporting"></div>
+      <div class="form-row"><label class="form-label">Owner(s)</label><input class="form-input" id="f-owner" value="${v('Owner')}" placeholder="JM or JM, RK, GL"><div class="form-hint">Separate multiple owners with a comma — e.g. JM, RK</div></div>
+    </div>
+    <div class="form-2">
+      <div class="form-row"><label class="form-label">Due Date</label><input class="form-input" id="f-due" value="${v('DueDate')}" placeholder="Mar 31"></div>
+      <div class="form-row"><label class="form-label">Status</label><select class="form-input" id="f-status">${so}</select></div>
+    </div>
+    <div class="form-row"><label class="form-label">Subtasks <span style="font-weight:400;color:var(--muted);font-size:11px;">— separate with | (pipe character)</span></label><textarea class="form-input" id="f-subtasks" rows="3" placeholder="Tie bank statement | Confirm deposits in transit | Confirm outstanding checks" style="resize:vertical;">${v('SubTasks')}</textarea><div style="font-size:11px;color:var(--muted);margin-top:3px;">Each subtask separated by | will appear as a checkbox under the task, just like Planner.</div></div>
+    <div class="form-row"><label class="form-label">Comments <span style="font-weight:400;color:var(--muted);font-size:11px;">— notes, issues, or context for this task</span></label><textarea class="form-input" id="f-comments" rows="3" placeholder="e.g. Waiting on bank to confirm wire details. Follow up with TW by Mar 28." style="resize:vertical;">${v('Comments')}</textarea></div>`;
+  document.getElementById('add-modal').classList.add('open');
+}
+
+function toggleReversingField(){
+  const checked=document.getElementById('f-reversing')?.checked;
+  const row=document.getElementById('f-rev-ref-row');
+  if(row)row.style.display=checked?'block':'none';
+}
+
+async function submitForm(){
+  const type=APP.formType;let fields={};
+  try{
+    if(type==='jes'){
+      const desc=document.getElementById('f-desc')?.value?.trim();
+      if(!desc){showToast('Description is required','error');return;}
+      fields={Description:desc,DueDate:document.getElementById('f-due')?.value?.trim(),Preparer:document.getElementById('f-prep')?.value?.trim()?.toUpperCase(),Reviewer:document.getElementById('f-rev')?.value?.trim()?.toUpperCase(),IntacctReference:document.getElementById('f-ref')?.value?.trim(),ReversingIntacctReference:document.getElementById('f-rev-ref')?.value?.trim()||'',Recurring:document.getElementById('f-recurring')?.checked||false,Reversing:document.getElementById('f-reversing')?.checked||false,Status:document.getElementById('f-status')?.value,Period:APP.period};
+    }else if(type==='recons'){
+      const acct=document.getElementById('f-acct')?.value?.trim();
+      if(!acct){showToast('Account is required','error');return;}
+      fields={Account:acct,GLBalance:parseFloat(document.getElementById('f-gl')?.value)||0,SubBalance:parseFloat(document.getElementById('f-sub')?.value)||0,Preparer:document.getElementById('f-prep')?.value?.trim()?.toUpperCase(),Reviewer:document.getElementById('f-rev')?.value?.trim()?.toUpperCase(),Status:document.getElementById('f-status')?.value,SignedPreparer:false,SignedReviewer:false,Period:APP.period};
+    }else{
+      const task=document.getElementById('f-task')?.value?.trim();
+      if(!task){showToast('Task description is required','error');return;}
+      fields={Task:task,Category:document.getElementById('f-cat')?.value?.trim()||'General',Owner:document.getElementById('f-owner')?.value?.trim()?.toUpperCase(),DueDate:document.getElementById('f-due')?.value?.trim(),Status:document.getElementById('f-status')?.value,SubTasks:document.getElementById('f-subtasks')?.value?.trim(),Comments:document.getElementById('f-comments')?.value?.trim(),Period:APP.period};
+    }
+    const btn=document.getElementById('modal-save');btn.textContent='Saving…';btn.disabled=true;
+    await saveItem(type,fields,APP.editId);
+    closeModal();updateProgress();render();showToast(APP.editId?'Updated':'Saved','success');
+  }catch(e){showToast('Error: '+e.message,'error');}
+  finally{const b=document.getElementById('modal-save');if(b){b.textContent='Save';b.disabled=false;}}
+}
+
+function closeModal(){document.getElementById('add-modal').classList.remove('open');}
+document.querySelectorAll('.overlay').forEach(el=>el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('open');}));
+
+let toastT;
+function showToast(msg,type=''){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast show'+(type?' '+type:'');
+  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),3000);
+}
+</script>
+</body>
+</html>
