@@ -701,16 +701,48 @@ function renderRecon(c){
     </table></div></div>`;
 }
 
+function parseDue(due){
+  if(!due||!due.trim()) return new Date('9999-12-31');
+  const months={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  const m=due.match(/([A-Za-z]+)\s*(\d+)/);
+  if(m){const mo=months[m[1]];if(mo!==undefined)return new Date(2026,mo,parseInt(m[2]));}
+  return new Date(due)||new Date('9999-12-31');
+}
+
 function renderChecklist(c){
   const tab=APP.tabs.checklist||'all';
+  const sort=APP.tabs.checklistSort||'category';
   let items=APP.data.checklist;
-  if(tab==='mine')items=items.filter(t=>t.Owner==='JM');
+  if(tab==='mine')items=items.filter(t=>t.Owner&&t.Owner.includes(APP.userInitials||'JM'));
   if(tab==='overdue')items=items.filter(t=>t.Status==='Overdue');
-  const cats=[...new Set(items.map(t=>t.Category||'General'))];
+  if(tab==='due-today')items=items.filter(t=>t.DueDate&&parseDue(t.DueDate)<=new Date());
+  if(tab==='due-week'){const week=new Date();week.setDate(week.getDate()+7);items=items.filter(t=>t.DueDate&&parseDue(t.DueDate)<=week);}
+  // Sort
+  if(sort==='due') items=[...items].sort((a,b)=>parseDue(a.DueDate)-parseDue(b.DueDate));
+  const useGroups = sort==='category';
+  const cats=useGroups?[...new Set(items.map(t=>t.Category||'General'))]:['All tasks'];
+  const overdueCount=APP.data.checklist.filter(t=>t.Status==='Overdue').length;
+  const todayCount=APP.data.checklist.filter(t=>t.DueDate&&parseDue(t.DueDate)<=new Date()&&t.Status!=='Complete').length;
+  const weekCount=APP.data.checklist.filter(t=>{const week=new Date();week.setDate(week.getDate()+7);return t.DueDate&&parseDue(t.DueDate)<=week&&t.Status!=='Complete';}).length;
   c.innerHTML=`<div class="card">
-    <div class="card-head"><span class="card-title">Close checklist</span><button class="btn btn-sm btn-primary" onclick="openModal('checklist')">+ Add task</button></div>
-    <div class="tab-row">${[['all','All ('+APP.data.checklist.length+')'],['mine','My tasks'],['overdue','Overdue']].map(([k,l])=>`<div class="tab ${tab===k?'active':''}" onclick="setTab('checklist','${k}')">${l}</div>`).join('')}</div>
-    ${cats.map(cat=>{const ci=items.filter(t=>(t.Category||'General')===cat);return`<div class="cat-label">${cat}</div><table><tbody>${ci.map(t=>{
+    <div class="card-head">
+      <span class="card-title">Close checklist</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <select class="form-input" style="font-size:12px;padding:4px 8px;width:auto;" onchange="APP.tabs.checklistSort=this.value;render();">
+          <option value="category" ${sort==='category'?'selected':''}>Group by category</option>
+          <option value="due" ${sort==='due'?'selected':''}>Sort by due date</option>
+        </select>
+        <button class="btn btn-sm btn-primary" onclick="openModal('checklist')">+ Add task</button>
+      </div>
+    </div>
+    <div class="tab-row">${[
+      ['all','All ('+APP.data.checklist.length+')'],
+      ['mine','My tasks'],
+      ['due-today',todayCount>0?`Due today (${todayCount})`:'Due today'],
+      ['due-week',weekCount>0?`Due this week (${weekCount})`:'Due this week'],
+      ['overdue',overdueCount>0?`Overdue (${overdueCount})`:'Overdue']
+    ].map(([k,l])=>`<div class="tab ${tab===k?'active':''}" onclick="setTab('checklist','${k}')">${l}</div>`).join('')}</div>
+    ${cats.map(cat=>{const ci=useGroups?items.filter(t=>(t.Category||'General')===cat):items;return`${useGroups?`<div class="cat-label">${cat}</div>`:''}<table><tbody>${ci.map(t=>{
       const subs=(t.SubTasks||'').split('|').map(s=>s.trim()).filter(Boolean);
       const subsDone=APP.subTaskState[t.id]||{};
       const subCount=subs.length;
