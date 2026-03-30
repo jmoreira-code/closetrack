@@ -715,15 +715,25 @@ function renderChecklist(c){
   let items=APP.data.checklist;
   if(tab==='mine')items=items.filter(t=>t.Owner&&t.Owner.includes(APP.userInitials||'JM'));
   if(tab==='overdue')items=items.filter(t=>t.Status==='Overdue');
-  if(tab==='due-today')items=items.filter(t=>t.DueDate&&parseDue(t.DueDate)<=new Date());
-  if(tab==='due-week'){const week=new Date();week.setDate(week.getDate()+7);items=items.filter(t=>t.DueDate&&parseDue(t.DueDate)<=week);}
+  const today=new Date();today.setHours(0,0,0,0);
+  const tomorrow=new Date(today);tomorrow.setDate(tomorrow.getDate()+1);
+  const dayAfter=new Date(today);dayAfter.setDate(dayAfter.getDate()+2);
+  const week=new Date(today);week.setDate(week.getDate()+7);
+  if(tab==='due-today')items=items.filter(t=>{if(!t.DueDate)return false;const d=parseDue(t.DueDate);d.setHours(0,0,0,0);return d.getTime()===today.getTime()&&t.Status!=='Complete';});
+  if(tab==='due-tomorrow')items=items.filter(t=>{if(!t.DueDate)return false;const d=parseDue(t.DueDate);d.setHours(0,0,0,0);return d.getTime()===tomorrow.getTime()&&t.Status!=='Complete';});
+  if(tab==='due-week')items=items.filter(t=>{if(!t.DueDate)return false;const d=parseDue(t.DueDate);return d>=today&&d<week&&t.Status!=='Complete';});
   // Sort
   if(sort==='due') items=[...items].sort((a,b)=>parseDue(a.DueDate)-parseDue(b.DueDate));
   const useGroups = sort==='category';
   const cats=useGroups?[...new Set(items.map(t=>t.Category||'General'))]:['All tasks'];
   const overdueCount=APP.data.checklist.filter(t=>t.Status==='Overdue').length;
-  const todayCount=APP.data.checklist.filter(t=>t.DueDate&&parseDue(t.DueDate)<=new Date()&&t.Status!=='Complete').length;
-  const weekCount=APP.data.checklist.filter(t=>{const week=new Date();week.setDate(week.getDate()+7);return t.DueDate&&parseDue(t.DueDate)<=week&&t.Status!=='Complete';}).length;
+  const _today=new Date();_today.setHours(0,0,0,0);
+  const _tomorrow=new Date(_today);_tomorrow.setDate(_tomorrow.getDate()+1);
+  const _dayAfter=new Date(_today);_dayAfter.setDate(_dayAfter.getDate()+2);
+  const _week=new Date(_today);_week.setDate(_week.getDate()+7);
+  const todayCount=APP.data.checklist.filter(t=>{if(!t.DueDate||t.Status==='Complete')return false;const d=parseDue(t.DueDate);d.setHours(0,0,0,0);return d.getTime()===_today.getTime();}).length;
+  const tomorrowCount=APP.data.checklist.filter(t=>{if(!t.DueDate||t.Status==='Complete')return false;const d=parseDue(t.DueDate);d.setHours(0,0,0,0);return d.getTime()===_tomorrow.getTime();}).length;
+  const weekCount=APP.data.checklist.filter(t=>{if(!t.DueDate||t.Status==='Complete')return false;const d=parseDue(t.DueDate);return d>=_today&&d<_week;}).length;
   c.innerHTML=`<div class="card">
     <div class="card-head">
       <span class="card-title">Close checklist</span>
@@ -738,8 +748,9 @@ function renderChecklist(c){
     <div class="tab-row">${[
       ['all','All ('+APP.data.checklist.length+')'],
       ['mine','My tasks'],
-      ['due-today',todayCount>0?`Due today (${todayCount})`:'Due today'],
-      ['due-week',weekCount>0?`Due this week (${weekCount})`:'Due this week'],
+      ['due-today',todayCount>0?`Today (${todayCount})`:'Today'],
+      ['due-tomorrow',tomorrowCount>0?`Tomorrow (${tomorrowCount})`:'Tomorrow'],
+      ['due-week',weekCount>0?`This week (${weekCount})`:'This week'],
       ['overdue',overdueCount>0?`Overdue (${overdueCount})`:'Overdue']
     ].map(([k,l])=>`<div class="tab ${tab===k?'active':''}" onclick="setTab('checklist','${k}')">${l}</div>`).join('')}</div>
     ${cats.map(cat=>{const ci=useGroups?items.filter(t=>(t.Category||'General')===cat):items;return`${useGroups?`<div class="cat-label">${cat}</div>`:''}<table><tbody>${ci.map(t=>{
