@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CloseTrack — Month-End Close Manager</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/msal-browser/3.10.0/msal-browser.min.js"></script>
 <style>
 :root {
   --blue:#185FA5;--blue-lt:#E6F1FB;--blue-mid:#378ADD;
@@ -336,6 +335,17 @@ function showSetup(){
 // DATA STORAGE — localStorage, works from any browser anywhere
 const STORE_KEY = 'ct_data_v1';
 
+async function loadMSAL(){
+  if(typeof msal !== 'undefined') return true;
+  return new Promise((resolve)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/msal-browser/3.10.0/msal-browser.min.js';
+    s.onload=()=>resolve(true);
+    s.onerror=()=>resolve(false);
+    document.head.appendChild(s);
+  });
+}
+
 async function startDeviceFlow(){
   const period = document.getElementById('sp-period')?.value?.trim() || 'March 2026';
   const username = document.getElementById('sp-username')?.value?.trim() || 'You';
@@ -350,6 +360,11 @@ async function startDeviceFlow(){
   const err = document.getElementById('setup-err');
   err.style.display = 'none';
   try{
+    // Load MSAL dynamically
+    const msalLoaded = await loadMSAL();
+    if(!msalLoaded){
+      throw new Error('Microsoft sign-in library could not load. Please check your internet connection.');
+    }
     // Try MSAL SharePoint connection
     const msalConfig = {
       auth:{
@@ -408,7 +423,10 @@ function copyCode(){}
 async function refreshToken(){
   if(!APP._msalInstance && APP.useSharePoint){
     try{
-      if(typeof msal==='undefined') return false;
+      if(typeof msal==='undefined'){
+        const loaded = await loadMSAL();
+        if(!loaded) return false;
+      }
       const msalConfig={auth:{clientId:CLIENT_ID,authority:'https://login.microsoftonline.com/common',redirectUri:window.location.href.split('?')[0].split('#')[0]},cache:{cacheLocation:'localStorage',storeAuthStateInCookie:true}};
       const msalInstance=new msal.PublicClientApplication(msalConfig);
       await msalInstance.initialize();
