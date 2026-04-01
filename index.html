@@ -314,7 +314,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     Object.assign(APP,{spUrl:c.spUrl||'',period:c.period||'March 2026',isDemo:c.isDemo||false,userName:c.userName||'',userInitials:c.userInitials||'U',useSharePoint:c.useSharePoint||false,accessToken:c.accessToken||null,tokenExpiry:c.tokenExpiry||0});
     if(APP.isDemo){launchApp();return;}
     if(APP.accessToken&&APP.tokenExpiry>Date.now()){launchApp();return;}
-    if(APP.refreshToken){refreshToken().then(ok=>ok?launchApp():showSetup());return;}
+    if(APP.useSharePoint){refreshToken().then(ok=>ok?launchApp():showSetup());return;}
   }
   showSetup();
 });
@@ -397,6 +397,29 @@ async function startDeviceFlow(){
 
 function cancelAuth(){ useDemoMode(); }
 function copyCode(){}
+
+async function refreshToken(){
+  if(!APP._msalInstance && APP.useSharePoint){
+    try{
+      const msalConfig={auth:{clientId:CLIENT_ID,authority:'https://login.microsoftonline.com/common',redirectUri:window.location.href.split('?')[0].split('#')[0]},cache:{cacheLocation:'localStorage',storeAuthStateInCookie:true}};
+      const msalInstance=new msal.PublicClientApplication(msalConfig);
+      await msalInstance.initialize();
+      APP._msalInstance=msalInstance;
+    }catch(e){ return false; }
+  }
+  if(APP._msalInstance){
+    try{
+      const accounts=APP._msalInstance.getAllAccounts();
+      if(accounts.length>0){
+        const result=await APP._msalInstance.acquireTokenSilent({scopes:['Sites.ReadWrite.All','User.Read'],account:accounts[0]});
+        APP.accessToken=result.accessToken;
+        APP.tokenExpiry=Date.now()+3540000;
+        return true;
+      }
+    }catch(e){}
+  }
+  return false;
+}
 
 // GRAPH API
 async function graphRequest(method, endpoint, body=null){
