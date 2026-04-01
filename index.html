@@ -207,49 +207,36 @@
 <div id="setup-screen" class="setup-screen" style="display:none;">
   <div class="setup-card">
     <div class="setup-logo">CloseTrack</div>
-    <div class="setup-subtitle">Month-end close management, backed by SharePoint</div>
+    <div class="setup-subtitle">Month-end close management · Eventus Whole Health</div>
 
-    <div class="demo-note">
-       <strong>No SharePoint yet?</strong> Click "Use Demo Mode" to explore with sample data. Connect SharePoint when you're ready to go live.
+    <div class="demo-note" style="background:#E6F1FB;color:#185FA5;">
+      📋 Your data saves automatically in this browser. Each team member enters their name to get started.
     </div>
 
     <div class="setup-step">
       <div class="step-num">1</div>
       <div class="step-content">
-        <div class="step-title">Create three SharePoint Lists</div>
-        <div class="step-desc">
-          In your SharePoint site, go to <strong>New → List</strong> and create three lists named exactly:<br>
-          <code>CT_JournalEntries</code> &nbsp; <code>CT_Reconciliations</code> &nbsp; <code>CT_Checklist</code><br><br>
-          For each list, add the columns shown in the setup guide below.
-        </div>
+        <div class="step-title">Enter your close period</div>
+        <input class="form-input" id="period-input" value="March 2026" style="margin-top:8px;">
+        <div class="form-hint">e.g. March 2026, April 2026</div>
       </div>
     </div>
 
     <div class="setup-step">
       <div class="step-num">2</div>
       <div class="step-content">
-        <div class="step-title">Enter your SharePoint site URL</div>
-        <div class="step-desc">Paste the URL of your SharePoint site (e.g. <code>https://yourcompany.sharepoint.com/sites/Finance</code>)</div>
-        <input class="form-input" id="sp-url-input" placeholder="https://yourcompany.sharepoint.com/sites/Finance" style="margin-top:8px;">
-        <div class="form-hint">Found in your browser bar when viewing your SharePoint site.</div>
-      </div>
-    </div>
-
-    <div class="setup-step">
-      <div class="step-num">3</div>
-      <div class="step-content">
-        <div class="step-title">Enter your close period</div>
-        <div class="step-desc">What month/year are you closing?</div>
-        <input class="form-input" id="period-input" placeholder="March 2026" style="margin-top:8px;">
+        <div class="step-title">Enter your name</div>
+        <input class="form-input" id="name-input" placeholder="e.g. Jennifer Moreira" style="margin-top:8px;">
+        <div class="form-hint">Used to identify you on checklist items and sign-offs</div>
       </div>
     </div>
 
     <hr class="setup-divider">
     <div style="display:flex;gap:10px;">
-      <button class="btn btn-primary" onclick="connectSharePoint()" style="flex:1;">Connect to SharePoint</button>
+      <button class="btn btn-primary" onclick="startApp()" style="flex:1;">Get Started</button>
       <button class="btn" onclick="useDemoMode()" style="flex:1;">Use Demo Mode</button>
     </div>
-    <div id="setup-error" style="color:var(--red);font-size:12px;margin-top:10px;display:none;"></div>
+    <div id="setup-error" style="color:var(--red,#A32D2D);font-size:12px;margin-top:10px;display:none;"></div>
   </div>
 </div>
 
@@ -498,65 +485,67 @@ async function signInMsal() {
 // ─── DATA LAYER ───────────────────────────────────────────────────────────────
 async function loadAllData() {
   if (APP.isDemo) {
-    APP.data = {
-      jes: [...DEMO_DATA.jes],
-      recons: [...DEMO_DATA.recons],
-      checklist: [...DEMO_DATA.checklist]
-    };
+    APP.data = { jes: [...DEMO_DATA.jes], recons: [...DEMO_DATA.recons], checklist: [...DEMO_DATA.checklist] };
     return;
   }
-  try {
-    const [jes, recons, checklist] = await Promise.all([
-      getListItems('CT_JournalEntries', APP.period),
-      getListItems('CT_Reconciliations', APP.period),
-      getListItems('CT_Checklist', APP.period)
-    ]);
-    APP.data = { jes, recons, checklist };
-  } catch(e) {
-    showToast('Error loading from SharePoint: ' + e.message, 'error');
-    // fallback to demo
-    APP.data = { jes: [...DEMO_DATA.jes], recons: [...DEMO_DATA.recons], checklist: [...DEMO_DATA.checklist] };
+  // Use localStorage with REAL data seed
+  var stored = loadFromStorage();
+  if (stored && (stored.jes.length || stored.recons.length || stored.checklist.length)) {
+    APP.data = stored;
+  } else {
+    // Seed with real Eventus data
+    APP.data = {
+      jes: REAL.jes.map(function(j){ return Object.assign({}, j, {Period: APP.period}); }),
+      recons: REAL.recons.map(function(r){ return Object.assign({}, r, {Period: APP.period}); }),
+      checklist: REAL.checklist.map(function(t){ return Object.assign({}, t, {Period: APP.period}); })
+    };
+    saveToStorage();
   }
 }
 
-async function saveItem(type, fields, editId = null) {
-  if (APP.isDemo) {
-    // Demo: update in-memory only
-    const list = APP.data[type];
-    if (editId !== null) {
-      const idx = list.findIndex(i => i.id == editId);
-      if (idx >= 0) list[idx] = { ...list[idx], ...fields };
-    } else {
-      const newId = Math.max(0, ...list.map(i => parseInt(i.id) || 0)) + 1;
-      list.push({ id: newId, ...fields });
-    }
-    return;
-  }
-  const listName = type === 'jes' ? 'CT_JournalEntries' : type === 'recons' ? 'CT_Reconciliations' : 'CT_Checklist';
-  if (editId) {
-    await updateListItem(listName, editId, fields);
-    const idx = APP.data[type].findIndex(i => i.id == editId);
-    if (idx >= 0) APP.data[type][idx] = { ...APP.data[type][idx], ...fields };
+async function saveItem(type, fields, editId) {
+  var list = APP.data[type];
+  if (editId != null) {
+    var idx = list.findIndex(function(i){ return i.id == editId; });
+    if (idx >= 0) list[idx] = Object.assign({}, list[idx], fields);
   } else {
-    const created = await createListItem(listName, { ...fields, Period: APP.period });
-    APP.data[type].push(created);
+    var newId = Date.now();
+    list.push(Object.assign({ id: newId, Period: APP.period }, fields));
   }
+  if (!APP.isDemo) saveToStorage();
 }
 
 async function patchItem(type, id, fields) {
-  if (APP.isDemo) {
-    const list = APP.data[type];
-    const idx = list.findIndex(i => i.id == id);
-    if (idx >= 0) Object.assign(list[idx], fields);
-    return;
-  }
-  const listName = type === 'jes' ? 'CT_JournalEntries' : type === 'recons' ? 'CT_Reconciliations' : 'CT_Checklist';
-  await updateListItem(listName, id, fields);
-  const idx = APP.data[type].findIndex(i => i.id == id);
-  if (idx >= 0) Object.assign(APP.data[type][idx], fields);
+  var list = APP.data[type];
+  var idx = list.findIndex(function(i){ return i.id == id; });
+  if (idx >= 0) Object.assign(list[idx], fields);
+  if (!APP.isDemo) saveToStorage();
 }
 
 // ─── SETUP ────────────────────────────────────────────────────────────────────
+
+// LOCAL STORAGE DATA LAYER
+const STORE_KEY = 'ct_data_v1';
+
+function loadFromStorage() {
+  try {
+    var raw = localStorage.getItem(STORE_KEY);
+    if (raw) {
+      var all = JSON.parse(raw);
+      return all[APP.period] || null;
+    }
+  } catch(e) {}
+  return null;
+}
+
+function saveToStorage() {
+  try {
+    var raw = localStorage.getItem(STORE_KEY);
+    var all = raw ? JSON.parse(raw) : {};
+    all[APP.period] = APP.data;
+    localStorage.setItem(STORE_KEY, JSON.stringify(all));
+  } catch(e) {}
+}
 
 const REAL={
   jes:[{"id":6000,"Description":"Accrual of Franchise Taxes","Preparer":"JM","Reviewer":"GL","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":true,"Reversing":false,"ReversingIntacctReference":""},{"id":6001,"Description":"Accrual of P Card Rebate","Preparer":"JM","Reviewer":"GL","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":true,"Reversing":false,"ReversingIntacctReference":""},{"id":6002,"Description":"Accrue Collins Growth Bonus","Preparer":"JM","Reviewer":"GL","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":true,"Reversing":false,"ReversingIntacctReference":""},{"id":6003,"Description":"Accrue Shared Savings Bonus - Dr. Goad","Preparer":"JM","Reviewer":"GL","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":true,"Reversing":false,"ReversingIntacctReference":""},{"id":6004,"Description":"ACO Shared Savings Revenue Accrual 2026","Preparer":"JM","Reviewer":"GL","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":true,"Reversing":false,"ReversingIntacctReference":""},{"id":6005,"Description":"Amortization of Finance Charges","Preparer":"AB","Reviewer":"JM","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":true,"Reversing":false,"ReversingIntacctReference":""},{"id":6006,"Description":"Amortization of Goodwill","Preparer":"AB","Reviewer":"JM","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":true,"Reversing":false,"ReversingIntacctReference":""},{"id":6007,"Description":"Amortization of Tradename","Preparer":"AB","Reviewer":"JM","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":true,"Reversing":false,"ReversingIntacctReference":""},{"id":6009,"Description":"Shared Savings Cost Accruals","Preparer":"RK","Reviewer":"JM","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":true,"Reversing":false,"ReversingIntacctReference":""},{"id":6010,"Description":"Accrued Interest on General Atlantic Sixth Street Lending Partners Loan","Preparer":"AB","Reviewer":"JM","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":true,"ReversingIntacctReference":""},{"id":6011,"Description":"Bank of New York Mellon Timing Difference","Preparer":"AB","Reviewer":"JM","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":true,"ReversingIntacctReference":""},{"id":6012,"Description":"Depreciation expense","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6013,"Description":"Correct Payroll Allocation between SE and VA","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 1","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6014,"Description":"EPH WV Sertus Cash/AR Reclass (1210)","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6015,"Description":"EWH VA Sertus Cash/AR Reclass (1200)","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6016,"Description":"EWH WH SE Sertus Cash/AR Reclass (400)","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6017,"Description":"MW (ACO) Sertus Cash/AR Reclass","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6018,"Description":"MW (ACO) SertusCash/AR Reclass (1130)","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6019,"Description":"MW (ECS) Sertus Cash/AR Reclass","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6020,"Description":"VISA CC Expense","Preparer":"AW","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6021,"Description":"FY 26 Bonus Accrual for FI - RD","Preparer":"RK","Reviewer":"JM","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6022,"Description":"MD Allowance Accrual","Preparer":"AB","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":true,"ReversingIntacctReference":""},{"id":6023,"Description":"MD Payroll Accrual","Preparer":"AB","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":true,"ReversingIntacctReference":""},{"id":6024,"Description":"Medical Claims Cash Reserve Transfer","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6025,"Description":"Medical Insurance Reserve","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 1","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6026,"Description":"Misc Pharmacy Billing Accrual (based on prior month actual)","Preparer":"AB","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":true,"ReversingIntacctReference":""},{"id":6027,"Description":"MW Misc Billing Accrual (based on prior month actual)","Preparer":"AB","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":true,"ReversingIntacctReference":""},{"id":6028,"Description":"Reclass Ambience","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6029,"Description":"Reclass AR and Allowance balance for CompMed TIN","Preparer":"AB","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6030,"Description":"Reclass Assembly Payments not yet applied","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6031,"Description":"Reclass Bank Fees recorded to 1120","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6032,"Description":"Reclass Chartpath","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6033,"Description":"Reclass Depreciation Expense Department","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6034,"Description":"Reclass Sertus Suspense Variances","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6035,"Description":"Reclass Suspense from Sertus to Assembly","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6036,"Description":"Record funding for LLC Benefit account","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 8","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6037,"Description":"SE Sertus Cash/AR Reclass","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6038,"Description":"Shared Savings Quality Bonus Accrual","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 1","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6039,"Description":"To reclass Analytic Wages to CIP for Datawarehouse Project","Preparer":"AB","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6040,"Description":"To reclass bank fees to correct department","Preparer":"AB","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6041,"Description":"To Reclass payment made in Bill with Divvy Card - Chartpath","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6042,"Description":"To Record Charges to Divvy CC","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 1","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6043,"Description":"To Record Wire from SSLP Lending, LLC","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 7","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6044,"Description":"Reclass Wex","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6045,"Description":"Reclass Suki","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6046,"Description":"PTO Hourly Accrual","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6047,"Description":"AP Accrual","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6048,"Description":"AP Non Reversing Accrual","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6049,"Description":"Add Back Category Reclass JE","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 10","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""}],
@@ -564,89 +553,52 @@ const REAL={
   checklist:[{"id":5000,"Task":"Reclass AP invoices to correct dimensions","Category":"Accounts Payable","Owner":"RK","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"WEX | Ambience | Chartpath | Suki, AI","Comments":""},{"id":5001,"Task":"Prepare Variance Analysis file","Category":"Monthly Tasks","Owner":"JM","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"","Comments":"Gina to notify to Jenn when we can begin review."},{"id":5002,"Task":"Next Gen Revenue","Category":"Revenue","Owner":"AB","DueDate":"Apr 9","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5003,"Task":"APCM Accrual - Reaccrue 2025 and Jan 2026","Category":"Revenue","Owner":"GL","DueDate":"Apr 7","Status":"Open","Period":"March 2026","SubTasks":"Accrue 2026 Current Month | Reaccrue Jan / Feb 2026 | Re Accrue 2025 | Reaccrue 2025 Physician reversal","Comments":""},{"id":5004,"Task":"Acquisition Bonus Accruals","Category":"Monthly Tasks","Owner":"AB","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"Dr. Goad Bonus - Gina is working to find out the amount | Bulter $13.5% to cover taxes & Butler 2026 Acq Bonus Starting in Feb when doc signed | Collins Growth Bonus","Comments":"Nothing yet for Feb for Butler. Address again in March"},{"id":5005,"Task":"Accrue Provider Quality Bonus (MSSP/VBC/ACO) Changes each Month","Category":"Payroll","Owner":"RK","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"","Comments":"Copy from prior month and update amounts based on file saved in 2026 ME folder"},{"id":5006,"Task":"Dirk / Provectus TSA Reconciliation and Accrual","Category":"Accounts Payable","Owner":"GL","DueDate":"","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5007,"Task":"Save EOM Reports from Sertus","Category":"Monthly Tasks","Owner":"AB","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"EWH SE ACO | EWH | Premier WV | Eventus ECS | ECS | MW ACO | Premier VA","Comments":""},{"id":5008,"Task":"Post PurEDI Real Rev JE's","Category":"Revenue","Owner":"AB","DueDate":"Apr 7","Status":"Open","Period":"March 2026","SubTasks":"Post Actual Charges | Post Estimated Contractual & Write Off Reserves on Accrued Charges | Post Adjustments Accrual | Post Actual Adjustments | Post Charges Accrual (Lag Charges) | Post Estimated Contractual & Write Off Reserves","Comments":""},{"id":5009,"Task":"Post AMD Real Rev JE's","Category":"Revenue","Owner":"AB","DueDate":"Apr 7","Status":"Open","Period":"March 2026","SubTasks":"Post Actual Charges | Post Estimated Contractual & Write Off Reserves on Accrued Charges | Post Actual Adjustments | Post Charges Accrual (Lag Charges) | Post Estimated Contractual & Write Off Reserves | Post Adjustments Accrual","Comments":""},{"id":5010,"Task":"MOR package; Verify TTM addbacks","Category":"Reports","Owner":"RK","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5011,"Task":"Review CC Assignees Report","Category":"Monthly Tasks","Owner":"AW, RK","DueDate":"Apr 15","Status":"Open","Period":"March 2026","SubTasks":"","Comments":"\"Pull report of all credit card holders from FH Review for termed employees with active cards Review unsubmitted expenses and reports\""},{"id":5012,"Task":"Review Add Back Categories","Category":"Monthly Tasks","Owner":"RK","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"Racheal | Gina - Legal Expenses","Comments":"\"Review legal expense - Ask GL about Sign on Bonuses Retention Bonus  Severance Rent Expense - entry booked Accrued franchise BDO Transaction Cost Analysis RPM Healthcare invoices\""},{"id":5013,"Task":"Amortization of Tradename","Category":"Amortization and Depreciation","Owner":"AB","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5014,"Task":"Expense Analysis","Category":"Review","Owner":"","DueDate":"","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5015,"Task":"Variance Analysis","Category":"Reports","Owner":"","DueDate":"","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5016,"Task":"Weekly and Departmental P&L","Category":"Reports","Owner":"","DueDate":"","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5017,"Task":"Send out MD/Misc Statements","Category":"Monthly Tasks","Owner":"AB","DueDate":"Apr 15","Status":"Open","Period":"March 2026","SubTasks":"Misc Statements | MD Statements","Comments":"Send statements to facilities to ensure they have a statement of what is owed in total on the account."},{"id":5018,"Task":"Financial Statement Review","Category":"Review","Owner":"JM, RK, AB, GL","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"review 1120 P&L should no longer be posting JE's here","Comments":""},{"id":5019,"Task":"Reconcile Cash Held for Employee Benefits Account -First Horizon","Category":"Cash","Owner":"RK","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"106600 FH 9857 | 105400 FH 2358 | 101860 FH 8119 | 101400 FH 1168","Comments":""},{"id":5020,"Task":"Self-Funding Health Ins Medical Benefits: Expense","Category":"Accounts Payable","Owner":"RK","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5021,"Task":"Self-Funding Health Ins Medical Benefits: Funding","Category":"Cash","Owner":"RK","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"","Comments":"This is funding the benefit accounts."},{"id":5022,"Task":"Reconcile Bank of NY Mellon Cash Account","Category":"Cash","Owner":"AB","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5023,"Task":"AR Suspense","Category":"Cash","Owner":"JM","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"EPH WV (1210) | EWH Southeast (400) | Review Sertus Expense and reclass any Assembly Prior Period Receipts  | EWH (100) | Review Assembly suspense and adjust where necessary   | ECS (1110) | EPH VA (1200) | EVC (500) | ACO (4300) | Eventus ECS (1130)","Comments":"Review Sertus Suspense and Reclass any Assembly identified prior period receipts to Assembly Suspense"},{"id":5024,"Task":"Accrue Facility Engagement Bonus (Shared Savings/VBC/ACO)","Category":"Payroll","Owner":"JM","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5025,"Task":"Record Revenue for the ISNP","Category":"Revenue","Owner":"AB","DueDate":"Apr 7","Status":"Open","Period":"March 2026","SubTasks":"Revenue | Accrued Revenue","Comments":"Should get picked up in bank integration"},{"id":5026,"Task":"PTO Hourly Accrual","Category":"Payroll","Owner":"RK","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5027,"Task":"Record Mid Atlantic LTC/ACO COMPMED Charges and Allowance","Category":"Revenue","Owner":"AB","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5028,"Task":"13 Week Cash Forecast for Monthly Reporting Package","Category":"Reports","Owner":"AB","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5029,"Task":"Review Escheats for Dormancy","Category":"Monthly Tasks","Owner":"AW","DueDate":"Apr 15","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5030,"Task":"Accrue Interest after Cutoff","Category":"Monthly Tasks","Owner":"AB","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"","Comments":"Calculate -  Paying quarterly"},{"id":5031,"Task":"Post Payroll accrual for Log payments","Category":"Payroll","Owner":"AB","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"EWH | KY PAC | Premier (logs not required |  paid 100%) | VA Quinn | ECS | Provectus","Comments":""},{"id":5032,"Task":"Send MD Payroll based on logs submitted","Category":"Payroll","Owner":"AB","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"KY PAC | SE | Provectus | VA Quinn | Premier | MW","Comments":""},{"id":5033,"Task":"Check Unassigned dimensions","Category":"Review","Owner":"JM","DueDate":"Apr 9","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5034,"Task":"Reclass Current Portion of LTD","Category":"Quarterly Tasks","Owner":"AB","DueDate":"Apr 2","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5035,"Task":"MSA BS & Interco Reclass, ECS, Premier, PLLC","Category":"Annual Tasks","Owner":"","DueDate":"","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5036,"Task":"SOS Filings","Category":"Annual Tasks","Owner":"","DueDate":"","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5037,"Task":"Real and Personal Property Tax Returns/Payments","Category":"Annual Tasks","Owner":"","DueDate":"","Status":"Open","Period":"March 2026","SubTasks":"VA? | Indiana | Cabarrus | Durham","Comments":""},{"id":5038,"Task":"Franchise Tax Accrual SE GJ","Category":"Accounts Payable","Owner":"RK","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5039,"Task":"Verify All Charges to 5000 have been allocated","Category":"Allocations","Owner":"RK","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5040,"Task":"Send New Vendors to Emna for Compliance Testing","Category":"Monthly Tasks","Owner":"AW","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5041,"Task":"Mid Atlantic LTC/ACO COMPMED Revenue and Allowance Accrual","Category":"Revenue","Owner":"AB","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5042,"Task":"Review reports by discipline after Allocations and make any adjs","Category":"Reports","Owner":"AB, JM, RK","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5043,"Task":"Account AR Review for MD and Misc.","Category":"Monthly Tasks","Owner":"JM","DueDate":"Apr 13","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5044,"Task":"Reclass Employee WH account balances to Expense","Category":"Payroll","Owner":"RK","DueDate":"Apr 8","Status":"Open","Period":"March 2026","SubTasks":"Dental/Vision - Met Life | Life - UNUM | Medical - INDECS","Comments":""},{"id":5045,"Task":"Post all Misc. Charges for Prior Month","Category":"Revenue","Owner":"AB","DueDate":"Apr 2","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5046,"Task":"Reconcile Lockbox Account - Webster","Category":"Cash","Owner":"RK","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"Webster 7468 | Webster 7363","Comments":""},{"id":5047,"Task":"Reconcile All Payroll Accounts","Category":"Cash","Owner":"RK","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"Mgmt 2288 | MW 5789 | MW FH 6552 | PLLC 1077 | Premier 2113","Comments":""},{"id":5048,"Task":"Reconcile Lockbox Accounts - First Horizon","Category":"Cash","Owner":"AB","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"ECS 9817 | Mid-Atlantic 4213 | SE SC 0060 | EWH MA 029 | EWH Midwest Care 8534 | Eventus MM 6552 | WV2272 | SE LLC 9395 | Medicare 1175| Premier 2092 | ECS INC 9773 | 0614 | Premier 2302 | ACO 2001 | Commercial 1203","Comments":""},{"id":5049,"Task":"Reconcile Lockbox Accounts - PNC","Category":"Cash","Owner":"AB","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"Medicare/Medicaid 2577 | Patient 6431 | PNC Operating 0793","Comments":""},{"id":5050,"Task":"Reconcile Operating Accounts","Category":"Cash","Owner":"RK","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"FH Operating 2253","Comments":""},{"id":5051,"Task":"Check for Mismatch of Revenue and Wages on Accounts and Dimensions","Category":"Review","Owner":"JM, RK","DueDate":"Apr 9","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5052,"Task":"Send Draft to CFO","Category":"Review","Owner":"GJ","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5053,"Task":"Review P&L with Finance","Category":"Review","Owner":"GJ","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5054,"Task":"Misc AR to Leadership","Category":"Reports","Owner":"AB","DueDate":"Apr 15","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5055,"Task":"MD Report to Leadership","Category":"Reports","Owner":"AB","DueDate":"Apr 15","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5056,"Task":"AR Reconcile","Category":"Reconciliations","Owner":"JM","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"ACO | ECS | EWH | ECS New ACO 1130 | Premier Mid Atlantic Care 1230 (CompMed) | Premier 1200 | Tie out Allowance | EHP WV 1210 | Tie out AR for PM | EWH SD 400","Comments":""},{"id":5057,"Task":"Create Monthly Cash Forecast","Category":"Reports","Owner":"AB","DueDate":"","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5058,"Task":"Populate Monthly Reporting Workbook","Category":"Reports","Owner":"AB","DueDate":"Apr 13","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5059,"Task":"Check for Mismatch between entity and state","Category":"Review","Owner":"JM","DueDate":"Apr 9","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5060,"Task":"Check Concur posting dimensions","Category":"Review","Owner":"RK","DueDate":"Apr 8","Status":"Open","Period":"March 2026","SubTasks":"Check Posting Dimensions | Check Coding for 2026 budget","Comments":""},{"id":5061,"Task":"Cash Receipts for Misc.","Category":"Cash","Owner":"AB","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"Tie to Sertus | Ensure back up is attached in Intacct and saved under the cash folder","Comments":""},{"id":5062,"Task":"Misc. Allowance Adjustment","Category":"Revenue","Owner":"AB","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5063,"Task":"MD Allowance Adjustment","Category":"Revenue","Owner":"AB","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"KY PAC | SE | VA Quinn | MW | Premier | Provectus","Comments":""},{"id":5064,"Task":"Accrue Misc. Charges Current Month","Category":"Revenue","Owner":"AB","DueDate":"Apr 2","Status":"Open","Period":"March 2026","SubTasks":"Post Accrual entry and set up to reverse | Verify invoices are posted to the correct dimmensions","Comments":""},{"id":5065,"Task":"Reconcile AR Cash Receipts","Category":"Cash","Owner":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"EVC (500) | ECS (1110) | ACO (4300) | EPH WV (1210) | EPH VA (1200) | EWH SE ACO (400) | Eventus ECS (1130) | Tie out Assembly to Sertus | EWH (100)","Comments":"\"MD Receipts Misc Receipts Oher Receipts Sertus Receipts\""},{"id":5066,"Task":"Post All MD invoices","Category":"Revenue","Owner":"AB","DueDate":"Apr 2","Status":"Open","Period":"March 2026","SubTasks":"Apgar | Williams | Premier | MW | KY PAC | SE | Provectus | VA Quinn","Comments":""},{"id":5067,"Task":"Post All Empower 401K Transactions (Bank Integration)","Category":"Payroll","Owner":"RK","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"","Comments":"Weekly/Depending on off cycle"},{"id":5068,"Task":"Verify CCM Billed for PM","Category":"Revenue","Owner":"AB","DueDate":"Apr 7","Status":"Open","Period":"March 2026","SubTasks":"EWH (AMD) | Premier - VA (PurEDI) | ECS (AMD) | SE ACO (PurEDI) | Eventus ECS (PurEDI)","Comments":"Go into query and check CCM billed (prior month date of service, current billing period)"},{"id":5069,"Task":"Revenue Reconcilement","Category":"Reconciliations","Owner":"AB","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5070,"Task":"CCM Accrual and Allowance from Finance Estimate","Category":"Revenue","Owner":"AB","DueDate":"Apr 7","Status":"Open","Period":"March 2026","SubTasks":"SE ACO Accrual | MW ACO Accrual | ECS Accrual | SE ACO Allowance | MW ACO Allowance | EWH Accrual | EWH Allowance | ECS Allowance","Comments":""},{"id":5071,"Task":"Shared Savings Revenue Accrual","Category":"Revenue","Owner":"AB","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"VB ACO SS | LTC ACO SS","Comments":""},{"id":5072,"Task":"FI Bonus Accrual SE PJ","Category":"Payroll","Owner":"RK","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5073,"Task":"SG&A Bonus Accrual GJ","Category":"Payroll","Owner":"RK","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5074,"Task":"Accrue P Card Rebate SE GJ","Category":"Accounts Payable","Owner":"RK","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5075,"Task":"Accrue First Horizon Credit Card","Category":"Accounts Payable","Owner":"RK","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5076,"Task":"Post Non Reversing Accruals","Category":"Accounts Payable","Owner":"RK","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"Accounting Fees - Audit and Tax | Employee Meetings and Events","Comments":""},{"id":5077,"Task":"Post AP Reversing Accrual","Category":"Accounts Payable","Owner":"RK","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"Cosan | Unum | Zus Health | Verizon | Legal | Elastic | Monthly UKG Overage | Time Doc | Chartpath | Sertus | Check AP invoice list for any not posted","Comments":""},{"id":5078,"Task":"Close AP Subledger","Category":"Accounts Payable","Owner":"JM","DueDate":"Apr 9","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5079,"Task":"Reconcile AP Subledger to GL and Bill.com","Category":"Accounts Payable","Owner":"RK","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5080,"Task":"Post All Invoices with ME GL Posting Date","Category":"Accounts Payable","Owner":"AW","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"Elastic Mthly svc | ActivTrak | Waterloo | Delta Dental (3 inv) | Imagine360 | Checkr | HealthMark | PicassoMD | Sertus/Assembly | RPM | McDermott | UKG Qrly | Wex | Hallmark | Husch Blackwell | Awardco | TimeDoc | Ropes & Gray | Constellation | Assembly","Comments":""},{"id":5081,"Task":"Update ROU Asset and Amortization","Category":"Amortization and Depreciation","Owner":"RK","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5082,"Task":"Amortize Finance Charges SE GJ","Category":"Amortization and Depreciation","Owner":"AB","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5083,"Task":"Amortize Goodwill SE GJ","Category":"Amortization and Depreciation","Owner":"AB","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5084,"Task":"Amortize Other Prepaid","Category":"Amortization and Depreciation","Owner":"AB","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5085,"Task":"Amortize Prepaid Insurance","Category":"Amortization and Depreciation","Owner":"AB","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5086,"Task":"Post Depreciation and FA JEs","Category":"Amortization and Depreciation","Owner":"JM","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"Post Depreciation | Review laptops to Roster to dispose laptops","Comments":""},{"id":5087,"Task":"Review Allowance for reasonableness","Category":"Revenue","Owner":"JM","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"ECS | Premier ACO - Compmed? | SE ACO | MW ACO | Premier | EWH","Comments":""},{"id":5088,"Task":"MD Payroll Accrual - Receipts Prior to July 2024 (If Any)","Category":"Payroll","Owner":"AB","DueDate":"Apr 2","Status":"Open","Period":"March 2026","SubTasks":"MD Payroll - 100 | OH Provectus | MD Payroll - 1110","Comments":"\"No Receipts prior to July 2024. Only non Premier\""},{"id":5089,"Task":"CCM Payroll Accrual","Category":"Payroll","Owner":"RK","DueDate":"Apr 2","Status":"Open","Period":"March 2026","SubTasks":"MA Bonus - 100 | MA Bonus - 1110","Comments":"Copy prior month entry and use payroll GL details (MA bonus - support)"},{"id":5090,"Task":"Post productivity allocation for provider accrual","Category":"Payroll","Owner":"RK","DueDate":"Apr 9","Status":"Open","Period":"March 2026","SubTasks":"Productivity Accrual - 100 | Productivity Accrual - 1110","Comments":""},{"id":5091,"Task":"Accrue productivity wages for revenue accrual","Category":"Payroll","Owner":"JM","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"SE ACO | Premier | EWH | ECS | Check for Duplicates | Premier ACO (CompMed) | Eventus ECS","Comments":"For Premier make sure that VA Quinn & KY PAC are going to the correct substate."},{"id":5092,"Task":"Accrue payroll","Category":"Payroll","Owner":"RK","DueDate":"Apr 7","Status":"Open","Period":"March 2026","SubTasks":"Mgmt - 200 | Provider - 1110 | Provider - 100 | Premier - 1200","Comments":""},{"id":5093,"Task":"Post productivity allocations to Intacct","Category":"Payroll","Owner":"RK","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5094,"Task":"Post all pay runs to Intacct","Category":"Payroll","Owner":"RK","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""}]
 };;
 
-window.addEventListener('DOMContentLoaded', () => {
-  const saved = localStorage.getItem('ct_config');
-  if (saved) {
-    const cfg = JSON.parse(saved);
-    APP.spSiteUrl = cfg.spSiteUrl || '';
-    APP.period = cfg.period || 'Mar 2026';
-    APP.isDemo = cfg.isDemo || false;
-  }
-  if (APP.isDemo || APP.spSiteUrl) {
-    launchApp();
-  } else {
-    document.getElementById('setup-screen').style.display = 'flex';
-  }
-});
 
-async function connectSharePoint() {
-  const urlInput = document.getElementById('sp-url-input')?.value?.trim() || 'https://eventuswh.sharepoint.com/sites/ConsolidatedEntityMonthEndRecons';
-  const period = document.getElementById('period-input')?.value?.trim() || 'March 2026';
-  const errEl = document.getElementById('setup-error');
-  if(errEl) errEl.style.display = 'none';
-
-  APP.spSiteUrl = urlInput;
-  APP.period = period;
-  APP.isDemo = false;
-
-  // Use OAuth2 implicit flow - no external library needed
-  const redirectUri = window.location.href.split('?')[0].split('#')[0];
-  const authUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize' +
-    '?client_id=e3b98a3c-3e59-4b0c-ba1a-08f9aafc4f25' +
-    '&response_type=token' +
-    '&redirect_uri=' + encodeURIComponent(redirectUri) +
-    '&scope=' + encodeURIComponent('https://graph.microsoft.com/Sites.ReadWrite.All User.Read') +
-    '&response_mode=fragment' +
-    '&prompt=select_account';
-
-  showToast('Opening Microsoft sign-in...', 'success');
-  const popup = window.open(authUrl, 'msauth', 'width=500,height=600,left=200,top=100');
-
-  if (!popup || popup.closed) {
-    if(errEl){ errEl.textContent = 'Popup was blocked. Please allow popups for this site and try again, or use Demo Mode.'; errEl.style.display = 'block'; }
-    return;
-  }
-
-  const checkInterval = setInterval(() => {
-    try {
-      if (popup.closed) {
-        clearInterval(checkInterval);
-        if(errEl){ errEl.textContent = 'Sign-in window closed. Try again or use Demo Mode.'; errEl.style.display = 'block'; }
+window.addEventListener('DOMContentLoaded', function() {
+  try {
+    var saved = localStorage.getItem('ct_config');
+    if (saved) {
+      var cfg = JSON.parse(saved);
+      APP.period = cfg.period || 'March 2026';
+      APP.isDemo = cfg.isDemo || false;
+      APP.userName = cfg.userName || '';
+      APP.userInitials = cfg.userInitials || 'U';
+      if (APP.isDemo || APP.userName) {
+        launchApp();
         return;
       }
-      const hash = popup.location.hash;
-      if (hash && hash.includes('access_token')) {
-        clearInterval(checkInterval);
-        popup.close();
-        const params = new URLSearchParams(hash.substring(1));
-        APP.accessToken = params.get('access_token');
-        APP.tokenExpiry = Date.now() + (parseInt(params.get('expires_in') || '3600') - 60) * 1000;
-        APP.isConnected = true;
-        // Get user info
-        graphRequest('GET', '/me').then(me => {
-          if (me) {
-            APP.userName = me.displayName || me.userPrincipalName || 'You';
-            APP.userInitials = (me.displayName || 'U').split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
-          }
-          localStorage.setItem('ct_config', JSON.stringify({ spSiteUrl: APP.spSiteUrl, period: APP.period, isDemo: false, accessToken: APP.accessToken, tokenExpiry: APP.tokenExpiry }));
-          launchApp();
-        }).catch(() => {
-          localStorage.setItem('ct_config', JSON.stringify({ spSiteUrl: APP.spSiteUrl, period: APP.period, isDemo: false }));
-          launchApp();
-        });
-      }
-    } catch(e) { /* popup still on Microsoft page, keep waiting */ }
-  }, 500);
+    }
+  } catch(e) {}
+  document.getElementById('setup-screen').style.display = 'flex';
+});
 
-  setTimeout(() => {
-    clearInterval(checkInterval);
-    if (!popup.closed) popup.close();
-  }, 120000);
+function startApp() {
+  var period = document.getElementById('period-input')?.value?.trim() || 'March 2026';
+  var name = document.getElementById('name-input')?.value?.trim() || '';
+  var err = document.getElementById('setup-error');
+  if (!name) {
+    err.textContent = 'Please enter your name.';
+    err.style.display = 'block';
+    return;
+  }
+  err.style.display = 'none';
+  APP.period = period;
+  APP.isDemo = false;
+  APP.userName = name;
+  APP.userInitials = name.split(' ').map(function(w){ return w[0]; }).slice(0,2).join('').toUpperCase() || 'U';
+  APP.isConnected = false;
+  localStorage.setItem('ct_config', JSON.stringify({ period: period, isDemo: false, userName: name, userInitials: APP.userInitials }));
+  launchApp();
 }
+
+async function connectSharePoint() { startApp(); }
+
 
 function useDemoMode() {
   APP.isDemo = true;
-  APP.period = document.getElementById('period-input').value.trim() || 'Mar 2026';
+  APP.period = document.getElementById('period-input')?.value?.trim() || 'March 2026';
+  APP.userName = 'Demo User';
+  APP.userInitials = 'DU';
   localStorage.setItem('ct_config', JSON.stringify({ isDemo: true, period: APP.period }));
   launchApp();
 }
@@ -655,20 +607,21 @@ async function launchApp() {
   document.getElementById('setup-screen').style.display = 'none';
   document.getElementById('main-app').style.display = 'flex';
   updateSpStatus();
-  document.getElementById('sidebar-period').textContent = APP.period;
-  document.getElementById('period-chip').textContent = APP.period;
+  var per = APP.period || 'March 2026';
+  document.getElementById('sidebar-period').textContent = per;
+  document.getElementById('period-chip').textContent = per;
   document.getElementById('user-name').textContent = APP.userName || (APP.isDemo ? 'Demo User' : 'You');
   document.getElementById('user-avatar').textContent = APP.userInitials || (APP.isDemo ? 'DU' : 'U');
   await refreshData();
 }
 
 function updateSpStatus() {
-  const badge = document.getElementById('sp-status-badge');
-  const text = document.getElementById('sp-status-text');
+  var badge = document.getElementById('sp-status-badge');
+  var text = document.getElementById('sp-status-text');
+  if (!badge || !text) return;
   badge.className = 'sp-status';
   if (APP.isDemo) { badge.classList.add('sp-disconnected'); text.textContent = 'Demo mode'; }
-  else if (APP.isConnected) { badge.classList.add('sp-connected'); text.textContent = 'SharePoint live'; }
-  else { badge.classList.add('sp-loading'); text.textContent = 'Connecting…'; }
+  else { badge.classList.add('sp-loading'); text.textContent = 'Data saved locally'; }
 }
 
 async function refreshData() {
@@ -919,28 +872,43 @@ function renderSetup(c) {
   c.innerHTML = `<div class="card">
     <div class="card-header"><span class="card-title">Connection settings</span></div>
     <div style="padding:20px;">
-      <div style="margin-bottom:18px;">
-        <div class="form-label">Status</div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span class="badge ${APP.isDemo?'b-overdue':APP.isConnected?'b-complete':'b-prep'}">${APP.isDemo?'Demo mode':APP.isConnected?'Connected to SharePoint':'Disconnected'}</span>
-          ${APP.isConnected?`<span style="font-size:12px;color:var(--text-muted);">${APP.spSiteUrl}</span>`:''}
-        </div>
+      <div style="margin-bottom:16px;padding:12px 14px;background:#E6F1FB;border-radius:8px;font-size:13px;color:#185FA5;">
+        <strong>Status: Data saved locally</strong><br>
+        Your changes save automatically in this browser. Each team member has their own copy until SharePoint sync is set up.
       </div>
       <div class="form-row">
-        <label class="form-label">SharePoint site URL</label>
-        <input class="form-input" id="cfg-sp-url" value="${APP.spSiteUrl||''}" placeholder="https://yourcompany.sharepoint.com/sites/Finance">
+        <label class="form-label">Your name</label>
+        <input class="form-input" id="cfg-name" value="${APP.userName||''}">
       </div>
       <div class="form-row">
         <label class="form-label">Close period</label>
-        <input class="form-input" id="cfg-period" value="${APP.period||'Mar 2026'}" placeholder="Mar 2026">
+        <input class="form-input" id="cfg-period" value="${APP.period||'March 2026'}" placeholder="March 2026">
+        <div class="form-hint">Change this at the start of each new month</div>
       </div>
       <div style="display:flex;gap:10px;margin-top:6px;">
-        <button class="btn btn-primary" onclick="saveSettings()">Save &amp; Reconnect</button>
-        <button class="btn" onclick="clearSettings()">Reset to Demo Mode</button>
-        <button class="btn" onclick="openModal('col-guide-modal')">View SharePoint setup guide</button>
+        <button class="btn btn-primary" onclick="saveLocalSettings()">Save changes</button>
+        <button class="btn" onclick="clearSettings()">Switch to Demo Mode</button>
+      </div>
+      <div style="margin-top:20px;padding:12px 14px;background:#EAF3DE;border-radius:8px;font-size:13px;color:#3B6D11;">
+        <strong>SharePoint sync (coming soon)</strong> — Once IT whitelists login.microsoftonline.com and graph.microsoft.com in Zscaler, CloseTrack will sync live data across your whole team.
       </div>
     </div>
   </div>`;
+}
+
+function saveLocalSettings() {
+  var name = document.getElementById('cfg-name')?.value?.trim() || APP.userName;
+  var period = document.getElementById('cfg-period')?.value?.trim() || APP.period;
+  APP.userName = name;
+  APP.userInitials = name.split(' ').map(function(w){ return w[0]; }).slice(0,2).join('').toUpperCase() || 'U';
+  APP.period = period;
+  localStorage.setItem('ct_config', JSON.stringify({ period: period, isDemo: false, userName: name, userInitials: APP.userInitials }));
+  document.getElementById('sidebar-period').textContent = period;
+  document.getElementById('period-chip').textContent = period;
+  document.getElementById('user-name').textContent = name;
+  document.getElementById('user-avatar').textContent = APP.userInitials;
+  showToast('Settings saved', 'success');
+  render();
 }
 
 // ─── ACTIONS ──────────────────────────────────────────────────────────────────
