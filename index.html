@@ -348,10 +348,20 @@ const STORE_KEY = 'ct_data_v1';
 
 async function loadMSAL(){
   if(typeof msal !== 'undefined') return true;
+  // Try primary CDN
+  const loaded = await new Promise((resolve)=>{
+    const s=document.createElement('script');
+    s.src='https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js';
+    s.onload=()=>setTimeout(()=>resolve(typeof msal!=='undefined'),100);
+    s.onerror=()=>resolve(false);
+    document.head.appendChild(s);
+  });
+  if(loaded) return true;
+  // Try fallback CDN
   return new Promise((resolve)=>{
     const s=document.createElement('script');
     s.src='https://cdnjs.cloudflare.com/ajax/libs/msal-browser/3.10.0/msal-browser.min.js';
-    s.onload=()=>resolve(true);
+    s.onload=()=>setTimeout(()=>resolve(typeof msal!=='undefined'),100);
     s.onerror=()=>resolve(false);
     document.head.appendChild(s);
   });
