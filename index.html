@@ -1103,7 +1103,7 @@ async function reconnect(){
     saveConfig();
     updatePill();
     showReconnectBanner();
-    showToast('Connected to SharePoint ✓ Loading your team's data…','success');
+    showToast('Connected to SharePoint ✓ Loading your team data…','success');
     await refreshAll();
     render();
   }catch(e){
