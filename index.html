@@ -4,305 +4,559 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>CloseTrack — Month-End Close Manager</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/msal-browser/3.10.0/msal-browser.min.js"></script>
 <style>
-:root {
-  --blue:#185FA5;--blue-lt:#E6F1FB;--blue-mid:#378ADD;
-  --green:#3B6D11;--green-lt:#EAF3DE;
-  --amber:#854F0B;--amber-lt:#FAEEDA;
-  --red:#A32D2D;--red-lt:#FCEBEB;
-  --gray:#5F5E5A;--gray-lt:#F1EFE8;
-  --teal-lt:#E1F5EE;
-  --border:rgba(0,0,0,0.11);
-  --bg:#f7f6f4;--surface:#fff;
-  --text:#1a1a18;--muted:#6b6a66;--hint:#9b9a96;
-  --r:8px;--rl:12px;
-}
-*{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px;}
-button{font-family:inherit;cursor:pointer;}
-input,select,textarea{font-family:inherit;font-size:13px;}
-.app{display:flex;height:100vh;overflow:hidden;}
-.sidebar{width:212px;background:var(--surface);border-right:0.5px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;}
-.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
-.sb-head{padding:18px 16px 14px;border-bottom:0.5px solid var(--border);}
-.logo{font-size:17px;font-weight:700;color:var(--blue);letter-spacing:-.4px;}
-.period-tag{font-size:11px;color:var(--muted);margin-top:2px;}
-.nav-label{font-size:10px;font-weight:700;color:var(--hint);text-transform:uppercase;letter-spacing:.08em;padding:12px 16px 4px;}
-.nav-item{display:flex;align-items:center;gap:9px;padding:8px 16px;font-size:13px;color:var(--muted);cursor:pointer;border-left:2px solid transparent;transition:all .12s;user-select:none;}
-.nav-item:hover{background:var(--bg);color:var(--text);}
-.nav-item.active{color:var(--blue);background:var(--blue-lt);border-left-color:var(--blue);font-weight:500;}
-.nav-spacer{flex:1;}
-.sb-foot{padding:12px 16px;border-top:0.5px solid var(--border);}
-.user-row{display:flex;align-items:center;gap:8px;}
-.av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;}
-.av-blue{background:#B5D4F4;color:#0C447C;}
-.av-teal{background:#9FE1CB;color:#085041;}
-.av-purple{background:#CECBF6;color:#3C3489;}
-.av-coral{background:#F5C4B3;color:#712B13;}
-.av-green{background:#C0DD97;color:#27500A;}
-.sp-pill{font-size:10px;margin-top:6px;padding:3px 8px;border-radius:20px;display:inline-flex;align-items:center;gap:4px;}
-.sp-live{background:var(--green-lt);color:var(--green);}
-.sp-demo{background:var(--amber-lt);color:var(--amber);}
-.topbar{background:var(--surface);border-bottom:0.5px solid var(--border);padding:11px 22px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
-.view-title{font-size:15px;font-weight:700;}
-.chip{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:500;}
-.chip-blue{background:var(--blue-lt);color:var(--blue);}
-.prog-wrap{display:flex;align-items:center;gap:8px;}
-.prog-bar{width:130px;height:5px;background:var(--bg);border-radius:3px;overflow:hidden;}
-.prog-fill{height:100%;background:var(--green);border-radius:3px;transition:width .4s ease;}
-.prog-label{font-size:12px;color:var(--muted);}
-.content{flex:1;overflow-y:auto;padding:18px 22px;}
-.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px;}
-.metric{background:var(--bg);border-radius:var(--r);padding:13px 15px;}
-.m-label{font-size:11px;color:var(--muted);margin-bottom:5px;}
-.m-val{font-size:24px;font-weight:700;line-height:1;}
-.m-sub{font-size:11px;color:var(--hint);margin-top:3px;}
-.card{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--rl);margin-bottom:14px;overflow:hidden;}
-.card-head{padding:12px 16px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
-.card-title{font-size:13px;font-weight:700;}
-.tab-row{display:flex;border-bottom:0.5px solid var(--border);padding:0 16px;overflow-x:auto;}
-.tab{font-size:12px;padding:9px 12px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-.5px;white-space:nowrap;}
-.tab.active{color:var(--blue);border-bottom-color:var(--blue);font-weight:500;}
-.tab:hover:not(.active){color:var(--text);}
-.tw{overflow-x:auto;}
-table{width:100%;border-collapse:collapse;}
-th{text-align:left;padding:8px 16px;font-size:11px;font-weight:700;color:var(--muted);border-bottom:0.5px solid var(--border);white-space:nowrap;text-transform:uppercase;letter-spacing:.04em;}
-td{padding:9px 16px;border-bottom:0.5px solid var(--border);vertical-align:middle;font-size:13px;}
-tr:last-child td{border-bottom:none;}
-tr:hover td{background:#fafaf8;}
-.td-main{font-weight:600;}
-.badge{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap;}
-.b-complete{background:var(--green-lt);color:var(--green);}
-.b-review{background:var(--blue-lt);color:var(--blue);}
-.b-prep{background:var(--amber-lt);color:var(--amber);}
-.b-open{background:var(--gray-lt);color:var(--gray);}
-.b-overdue{background:var(--red-lt);color:var(--red);}
-.btn{font-size:12px;padding:6px 14px;border-radius:var(--r);border:0.5px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;transition:all .12s;}
-.btn:hover{background:var(--bg);}
-.btn-primary{background:var(--blue);color:#fff;border-color:var(--blue);}
-.btn-primary:hover{background:#0C447C;}
-.btn-sm{font-size:11px;padding:4px 10px;}
-.btn-sign{font-size:11px;padding:3px 8px;border-radius:var(--r);border:0.5px solid var(--border);background:none;color:var(--muted);cursor:pointer;}
-.btn-sign:hover{background:var(--bg);}
-.btn-sign.signed{background:var(--green-lt);color:var(--green);border-color:#97C459;cursor:default;}
-.btn-icon{background:none;border:none;padding:4px;color:var(--muted);border-radius:4px;font-size:14px;}
-.btn-icon:hover{background:var(--bg);color:var(--text);}
-.var-ok{color:var(--green);font-weight:600;}
-.var-bad{color:var(--red);font-weight:600;}
-input[type=checkbox]{width:15px;height:15px;accent-color:var(--blue);cursor:pointer;}
-.form-row{margin-bottom:13px;}
-.form-label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600;}
-.form-input{width:100%;padding:8px 10px;border:0.5px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-size:13px;}
-.form-input:focus{outline:none;border-color:var(--blue-mid);box-shadow:0 0 0 2px rgba(55,138,221,.15);}
-.form-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-.form-hint{font-size:11px;color:var(--hint);margin-top:3px;}
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.3);display:none;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(2px);}
-.overlay.open{display:flex;}
-.modal{background:var(--surface);border-radius:var(--rl);border:0.5px solid var(--border);width:480px;max-height:85vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.12);}
-.modal-head{padding:18px 20px 14px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
-.modal-title{font-size:15px;font-weight:700;}
-.modal-body{padding:18px 20px;}
-.modal-foot{padding:14px 20px;border-top:0.5px solid var(--border);display:flex;justify-content:flex-end;gap:8px;}
-.fullscreen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);}
-.setup-card{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--rl);width:540px;padding:36px;box-shadow:0 4px 24px rgba(0,0,0,.07);}
-.setup-logo{font-size:22px;font-weight:800;color:var(--blue);margin-bottom:4px;}
-.setup-sub{color:var(--muted);font-size:14px;margin-bottom:28px;}
-.step{display:flex;gap:14px;margin-bottom:20px;align-items:flex-start;}
-.step-num{width:26px;height:26px;border-radius:50%;background:var(--blue);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
-.step-title{font-size:13px;font-weight:700;margin-bottom:4px;}
-.step-desc{font-size:12px;color:var(--muted);line-height:1.6;}
-.step-desc code{background:var(--bg);padding:1px 5px;border-radius:3px;font-family:monospace;font-size:11px;color:var(--blue);}
-.divider{border:none;border-top:0.5px solid var(--border);margin:24px 0;}
-.info-box{border-radius:var(--r);padding:12px 14px;font-size:12px;margin-bottom:16px;line-height:1.6;}
-.info-blue{background:var(--blue-lt);color:var(--blue);}
-.info-amber{background:var(--amber-lt);color:var(--amber);}
-.info-green{background:var(--green-lt);color:var(--green);}
-.code-block{background:#1a1a18;color:#e8e6e3;font-family:monospace;font-size:22px;padding:16px;border-radius:var(--r);margin:10px 0;letter-spacing:4px;text-align:center;word-break:break-all;}
-.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;padding:14px;}
-.cal-day{border:0.5px solid var(--border);border-radius:var(--r);padding:8px;min-height:90px;background:var(--surface);}
-.cal-day.today{border-color:var(--blue);background:var(--blue-lt);}
-.cal-num{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:5px;}
-.cal-day.today .cal-num{color:var(--blue);}
-.cal-item{font-size:10px;padding:2px 5px;border-radius:3px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.loading{display:flex;align-items:center;justify-content:center;padding:40px;color:var(--muted);font-size:13px;gap:8px;}
-.spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--blue);border-radius:50%;animation:spin .7s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg)}}
-.empty{text-align:center;padding:36px;color:var(--muted);font-size:13px;}
-.cat-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#185FA5;background:#E6F1FB;padding:7px 16px;border-left:3px solid #185FA5;margin-top:6px;}
-.toast{position:fixed;bottom:24px;right:24px;background:var(--text);color:#fff;padding:10px 16px;border-radius:var(--r);font-size:13px;z-index:999;opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none;}
-.toast.show{opacity:1;transform:translateY(0);}
-.toast.success{background:var(--green);}
-.toast.error{background:var(--red);}
-::-webkit-scrollbar{width:5px;height:5px;}
-::-webkit-scrollbar-thumb{background:#d0cfc9;border-radius:3px;}
+  :root {
+    --blue: #185FA5;
+    --blue-light: #E6F1FB;
+    --blue-mid: #378ADD;
+    --green: #3B6D11;
+    --green-light: #EAF3DE;
+    --amber: #854F0B;
+    --amber-light: #FAEEDA;
+    --red: #A32D2D;
+    --red-light: #FCEBEB;
+    --gray: #5F5E5A;
+    --gray-light: #F1EFE8;
+    --teal: #0F6E56;
+    --teal-light: #E1F5EE;
+    --border: rgba(0,0,0,0.12);
+    --bg: #f8f7f5;
+    --surface: #ffffff;
+    --text: #1a1a18;
+    --text-muted: #6b6a66;
+    --text-hint: #9b9a96;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; font-size: 13px; }
+
+  /* Layout */
+  .app { display: flex; height: 100vh; overflow: hidden; }
+  .sidebar { width: 210px; background: var(--surface); border-right: 0.5px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Sidebar */
+  .sidebar-header { padding: 18px 16px 14px; border-bottom: 0.5px solid var(--border); }
+  .logo { font-size: 16px; font-weight: 600; color: var(--blue); letter-spacing: -0.3px; }
+  .period-badge { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .nav-section-label { font-size: 10px; font-weight: 600; color: var(--text-hint); text-transform: uppercase; letter-spacing: 0.08em; padding: 12px 16px 4px; }
+  .nav-item { display: flex; align-items: center; gap: 9px; padding: 8px 16px; font-size: 13px; color: var(--text-muted); cursor: pointer; border-left: 2px solid transparent; transition: all 0.12s; user-select: none; }
+  .nav-item:hover { background: var(--bg); color: var(--text); }
+  .nav-item.active { color: var(--blue); background: var(--blue-light); border-left-color: var(--blue); font-weight: 500; }
+  .nav-icon { width: 16px; text-align: center; font-size: 13px; }
+  .nav-spacer { flex: 1; }
+  .sidebar-footer { padding: 12px 16px; border-top: 0.5px solid var(--border); }
+  .user-row { display: flex; align-items: center; gap: 8px; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+  .av-blue { background: #B5D4F4; color: #0C447C; }
+  .av-teal { background: #9FE1CB; color: #085041; }
+  .av-purple { background: #CECBF6; color: #3C3489; }
+  .av-coral { background: #F5C4B3; color: #712B13; }
+  .av-green { background: #C0DD97; color: #27500A; }
+  .user-name { font-size: 12px; font-weight: 500; }
+  .user-role { font-size: 11px; color: var(--text-hint); }
+  .sp-status { font-size: 10px; margin-top: 6px; padding: 3px 8px; border-radius: 20px; display: inline-flex; align-items: center; gap: 4px; }
+  .sp-connected { background: var(--green-light); color: var(--green); }
+  .sp-disconnected { background: var(--red-light); color: var(--red); }
+  .sp-loading { background: var(--amber-light); color: var(--amber); }
+
+  /* Topbar */
+  .topbar { background: var(--surface); border-bottom: 0.5px solid var(--border); padding: 12px 22px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .topbar-left { display: flex; align-items: center; gap: 10px; }
+  .view-title { font-size: 15px; font-weight: 600; }
+  .chip { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 500; }
+  .chip-blue { background: var(--blue-light); color: var(--blue); }
+  .chip-green { background: var(--green-light); color: var(--green); }
+  .chip-amber { background: var(--amber-light); color: var(--amber); }
+  .chip-red { background: var(--red-light); color: var(--red); }
+  .chip-gray { background: var(--gray-light); color: var(--gray); }
+  .progress-wrap { display: flex; align-items: center; gap: 8px; }
+  .progress-bar { width: 130px; height: 5px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--green); border-radius: 3px; transition: width 0.4s ease; }
+  .progress-label { font-size: 12px; color: var(--text-muted); }
+  .topbar-actions { display: flex; gap: 8px; align-items: center; }
+
+  /* Content */
+  .content { flex: 1; overflow-y: auto; padding: 18px 22px; }
+
+  /* Metrics */
+  .metrics-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 16px; }
+  .metric-card { background: var(--bg); border-radius: var(--radius); padding: 13px 15px; }
+  .metric-label { font-size: 11px; color: var(--text-muted); margin-bottom: 5px; }
+  .metric-value { font-size: 24px; font-weight: 600; line-height: 1; }
+  .metric-sub { font-size: 11px; color: var(--text-hint); margin-top: 3px; }
+
+  /* Cards */
+  .card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); margin-bottom: 14px; overflow: hidden; }
+  .card-header { padding: 12px 16px; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .card-title { font-size: 13px; font-weight: 600; }
+
+  /* Tabs */
+  .tab-row { display: flex; border-bottom: 0.5px solid var(--border); padding: 0 16px; background: var(--surface); }
+  .tab { font-size: 12px; padding: 9px 12px; cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -0.5px; white-space: nowrap; }
+  .tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 500; }
+  .tab:hover:not(.active) { color: var(--text); }
+
+  /* Table */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; padding: 8px 16px; font-size: 11px; font-weight: 600; color: var(--text-muted); border-bottom: 0.5px solid var(--border); white-space: nowrap; text-transform: uppercase; letter-spacing: 0.04em; }
+  td { padding: 9px 16px; border-bottom: 0.5px solid var(--border); vertical-align: middle; font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafaf8; }
+  .td-main { font-weight: 500; }
+
+  /* Status badges */
+  .badge { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 500; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+  .b-complete { background: var(--green-light); color: var(--green); }
+  .b-review { background: var(--blue-light); color: var(--blue); }
+  .b-prep { background: var(--amber-light); color: var(--amber); }
+  .b-open { background: var(--gray-light); color: var(--gray); }
+  .b-overdue { background: var(--red-light); color: var(--red); }
+
+  /* Buttons */
+  .btn { font-size: 12px; padding: 6px 14px; border-radius: var(--radius); border: 0.5px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; transition: all 0.12s; }
+  .btn:hover { background: var(--bg); }
+  .btn-primary { background: var(--blue); color: white; border-color: var(--blue); }
+  .btn-primary:hover { background: #0C447C; }
+  .btn-sm { font-size: 11px; padding: 4px 10px; }
+  .btn-sign { font-size: 11px; padding: 3px 8px; border-radius: var(--radius); border: 0.5px solid var(--border); background: none; color: var(--text-muted); cursor: pointer; }
+  .btn-sign:hover { background: var(--bg); }
+  .btn-sign.signed { background: var(--green-light); color: var(--green); border-color: #97C459; cursor: default; }
+  .btn-sign.pending-you { background: var(--blue-light); color: var(--blue); border-color: var(--blue); }
+  .btn-icon { background: none; border: none; padding: 4px; color: var(--text-muted); border-radius: 4px; }
+  .btn-icon:hover { background: var(--bg); color: var(--text); }
+
+  /* Variance */
+  .var-ok { color: var(--green); font-weight: 500; }
+  .var-bad { color: var(--red); font-weight: 500; }
+
+  /* Checkbox */
+  input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--blue); cursor: pointer; }
+
+  /* Forms */
+  .form-row { margin-bottom: 13px; }
+  .form-label { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; font-weight: 500; }
+  .form-input { width: 100%; padding: 8px 10px; border: 0.5px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font-size: 13px; }
+  .form-input:focus { outline: none; border-color: var(--blue-mid); box-shadow: 0 0 0 2px rgba(55,138,221,0.15); }
+  .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-hint { font-size: 11px; color: var(--text-hint); margin-top: 3px; }
+
+  /* Modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.3); display: none; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(2px); }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border-radius: var(--radius-lg); border: 0.5px solid var(--border); width: 480px; max-height: 85vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.12); }
+  .modal-header { padding: 18px 20px 14px; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .modal-title { font-size: 15px; font-weight: 600; }
+  .modal-body { padding: 18px 20px; }
+  .modal-footer { padding: 14px 20px; border-top: 0.5px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+
+  /* Setup screen */
+  .setup-screen { display: flex; align-items: center; justify-content: center; height: 100vh; background: var(--bg); }
+  .setup-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); width: 520px; padding: 36px; box-shadow: 0 4px 24px rgba(0,0,0,0.07); }
+  .setup-logo { font-size: 22px; font-weight: 700; color: var(--blue); margin-bottom: 6px; }
+  .setup-subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 28px; }
+  .setup-step { display: flex; gap: 14px; margin-bottom: 20px; align-items: flex-start; }
+  .step-num { width: 26px; height: 26px; border-radius: 50%; background: var(--blue); color: white; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+  .step-content { flex: 1; }
+  .step-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .step-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+  .step-desc code { background: var(--bg); padding: 1px 5px; border-radius: 3px; font-family: monospace; font-size: 11px; color: var(--blue); }
+  .setup-divider { border: none; border-top: 0.5px solid var(--border); margin: 24px 0; }
+  .demo-note { background: var(--amber-light); border-radius: var(--radius); padding: 10px 14px; font-size: 12px; color: var(--amber); margin-bottom: 20px; }
+
+  /* Calendar */
+  .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 6px; padding: 14px; }
+  .cal-day { border: 0.5px solid var(--border); border-radius: var(--radius); padding: 8px; min-height: 90px; background: var(--surface); }
+  .cal-day.today { border-color: var(--blue); background: var(--blue-light); }
+  .cal-day-num { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; }
+  .cal-day.today .cal-day-num { color: var(--blue); }
+  .cal-item { font-size: 10px; padding: 2px 5px; border-radius: 3px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Loading */
+  .loading { display: flex; align-items: center; justify-content: center; padding: 32px; color: var(--text-muted); font-size: 13px; gap: 8px; }
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 36px; color: var(--text-muted); font-size: 13px; }
+  .empty-icon { font-size: 28px; margin-bottom: 8px; }
+
+  /* Notification toast */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--text); color: white; padding: 10px 16px; border-radius: var(--radius); font-size: 13px; z-index: 999; opacity: 0; transform: translateY(8px); transition: all 0.2s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.success { background: var(--green); }
+  .toast.error { background: var(--red); }
+
+  /* Category label */
+  .cat-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-hint); padding: 10px 16px 4px; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #d0cfc9; border-radius: 3px; }
 </style>
 </head>
 <body>
 
-
-<!-- SETUP SCREEN -->
-<div id="setup-screen" class="fullscreen" style="display:none;">
+<!-- Setup Screen -->
+<div id="setup-screen" class="setup-screen" style="display:none;">
   <div class="setup-card">
     <div class="setup-logo">CloseTrack</div>
-    <div class="setup-sub">Month-end close management · Eventus Whole Health</div>
-    <div class="info-box info-amber">💡 <strong>Your data saves automatically</strong> in your browser — no login or SharePoint connection required. Click <strong>Use Demo Mode</strong> to explore with sample data first.</div>
-    <div class="step">
+    <div class="setup-subtitle">Month-end close management, backed by SharePoint</div>
+
+    <div class="demo-note">
+       <strong>No SharePoint yet?</strong> Click "Use Demo Mode" to explore with sample data. Connect SharePoint when you're ready to go live.
+    </div>
+
+    <div class="setup-step">
       <div class="step-num">1</div>
-      <div>
-        <div class="step-title">Enter your close period</div>
-        <input class="form-input" id="sp-period" value="March 2026" style="margin-top:8px;">
-        <div style="font-size:12px;color:var(--muted);margin-top:4px;">e.g. March 2026, April 2026</div>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">2</div>
-      <div>
-        <div class="step-title">Enter your name</div>
-        <input class="form-input" id="sp-username" placeholder="e.g. Jennifer Moreira" style="margin-top:8px;">
-        <div style="font-size:12px;color:var(--muted);margin-top:4px;">Used to identify you on checklist items and sign-offs</div>
-      </div>
-    </div>
-    <hr class="divider">
-    <div style="background:var(--blue-lt);border-radius:var(--r);padding:10px 12px;font-size:12px;color:var(--blue);margin-bottom:14px;">
-      ℹ️ Clicking <strong>Connect to SharePoint</strong> will open a Microsoft sign-in window. Sign in with your work email to sync data with your team in real time. If the popup is blocked, the app will start in local-only mode.
-    </div>
-    <div style="display:flex;gap:10px;">
-      <button class="btn btn-primary" onclick="startDeviceFlow()" style="flex:1;">Connect to SharePoint</button>
-      <button class="btn" onclick="useDemoMode()" style="flex:1;">Use Demo Mode</button>
-    </div>
-    <div id="setup-err" style="color:var(--red);font-size:12px;margin-top:10px;display:none;"></div>
-  </div>
-</div>
-
-<!-- DEVICE CODE SCREEN -->
-<div id="device-screen" class="fullscreen" style="display:none;">
-  <div class="setup-card" style="text-align:center;">
-    <div class="setup-logo" style="margin-bottom:6px;">Almost there</div>
-    <div class="setup-sub">Complete sign-in in about 30 seconds</div>
-    <div class="info-box info-blue" style="text-align:left;"><strong>Step 1 —</strong> Copy this code:</div>
-    <div class="code-block" id="device-code-display">—</div>
-    <button class="btn btn-primary" onclick="copyCode()" style="width:100%;margin-bottom:18px;">📋 Copy code to clipboard</button>
-    <div class="info-box info-blue" style="text-align:left;"><strong>Step 2 —</strong> Open the link below in a new tab and paste the code:</div>
-    <a href="https://microsoft.com/devicelogin" target="_blank" style="display:block;margin-bottom:18px;text-decoration:none;">
-      <button class="btn btn-primary" style="width:100%;">Open microsoft.com/devicelogin ↗</button>
-    </a>
-    <div class="info-box info-amber" style="text-align:left;"><strong>Step 3 —</strong> Sign in with your Eventus work account and click Allow. Then come back here — CloseTrack will connect automatically.</div>
-    <div style="display:flex;align-items:center;gap:10px;justify-content:center;margin-top:14px;">
-      <div class="spinner"></div>
-      <span style="font-size:13px;color:var(--muted);" id="device-status">Waiting for sign-in…</span>
-    </div>
-    <button class="btn" onclick="cancelAuth()" style="margin-top:14px;width:100%;">Cancel — use Demo Mode instead</button>
-  </div>
-</div>
-
-<!-- MAIN APP -->
-<div id="main-app" class="app" style="display:none;">
-  <div class="sidebar">
-    <div class="sb-head">
-      <div class="logo">CloseTrack</div>
-      <div class="period-tag" id="sb-period">Mar 2026</div>
-    </div>
-    <div class="nav-label">Overview</div>
-    <div class="nav-item active" data-view="dashboard" onclick="nav('dashboard',this)">⊞ Dashboard</div>
-    <div class="nav-item" data-view="calendar" onclick="nav('calendar',this)">◻ Close Calendar</div>
-    <div class="nav-label">Work</div>
-    <div class="nav-item" data-view="je" onclick="nav('je',this)">◻ Journal Entries</div>
-    <div class="nav-item" data-view="recon" onclick="nav('recon',this)">◻ Reconciliations</div>
-    <div class="nav-item" data-view="checklist" onclick="nav('checklist',this)">◻ Checklist</div>
-    <div class="nav-label">Admin</div>
-    <div class="nav-item" data-view="settings" onclick="nav('settings',this)">◻ Connection</div>
-    <div class="nav-spacer"></div>
-    <div class="sb-foot">
-      <div class="user-row">
-        <div class="av av-blue" id="user-av">JM</div>
-        <div>
-          <div style="font-size:12px;font-weight:600;" id="user-name">Jennifer Moreira</div>
-          <div style="font-size:11px;color:var(--hint);">Controller</div>
+      <div class="step-content">
+        <div class="step-title">Create three SharePoint Lists</div>
+        <div class="step-desc">
+          In your SharePoint site, go to <strong>New → List</strong> and create three lists named exactly:<br>
+          <code>CT_JournalEntries</code> &nbsp; <code>CT_Reconciliations</code> &nbsp; <code>CT_Checklist</code><br><br>
+          For each list, add the columns shown in the setup guide below.
         </div>
       </div>
-      <div class="sp-pill sp-demo" id="sp-pill">● <span id="sp-txt">Demo mode</span></div>
+    </div>
+
+    <div class="setup-step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Enter your SharePoint site URL</div>
+        <div class="step-desc">Paste the URL of your SharePoint site (e.g. <code>https://yourcompany.sharepoint.com/sites/Finance</code>)</div>
+        <input class="form-input" id="sp-url-input" placeholder="https://yourcompany.sharepoint.com/sites/Finance" style="margin-top:8px;">
+        <div class="form-hint">Found in your browser bar when viewing your SharePoint site.</div>
+      </div>
+    </div>
+
+    <div class="setup-step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">Enter your close period</div>
+        <div class="step-desc">What month/year are you closing?</div>
+        <input class="form-input" id="period-input" placeholder="March 2026" style="margin-top:8px;">
+      </div>
+    </div>
+
+    <hr class="setup-divider">
+    <div style="display:flex;gap:10px;">
+      <button class="btn btn-primary" onclick="connectSharePoint()" style="flex:1;">Connect to SharePoint</button>
+      <button class="btn" onclick="useDemoMode()" style="flex:1;">Use Demo Mode</button>
+    </div>
+    <div id="setup-error" style="color:var(--red);font-size:12px;margin-top:10px;display:none;"></div>
+  </div>
+</div>
+
+<!-- Column Guide Modal -->
+<div class="modal-overlay" id="col-guide-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">SharePoint List Setup Guide</div>
+      <button class="btn-icon" onclick="closeModal('col-guide-modal')">✕</button>
+    </div>
+    <div class="modal-body" style="font-size:13px;line-height:1.7;">
+      <strong>CT_JournalEntries</strong> — add these columns (Single line of text unless noted):
+      <ul style="margin:6px 0 14px 18px;font-size:12px;color:var(--text-muted);">
+        <li>Description</li><li>Account</li><li>Amount (Number)</li>
+        <li>Preparer</li><li>Reviewer</li><li>DueDate</li>
+        <li>Status (Choice: Open, In Prep, In Review, Complete, Overdue)</li><li>Period</li>
+      </ul>
+      <strong>CT_Reconciliations</strong> — add these columns:
+      <ul style="margin:6px 0 14px 18px;font-size:12px;color:var(--text-muted);">
+        <li>Account</li><li>GLBalance (Number)</li><li>SubBalance (Number)</li>
+        <li>Preparer</li><li>Reviewer</li>
+        <li>Status (Choice: Open, In Prep, In Review, Complete, Overdue)</li>
+        <li>SignedPreparer (Yes/No)</li><li>SignedReviewer (Yes/No)</li><li>Period</li>
+      </ul>
+      <strong>CT_Checklist</strong> — add these columns:
+      <ul style="margin:6px 0 14px 18px;font-size:12px;color:var(--text-muted);">
+        <li>Task</li><li>Category</li><li>Owner</li><li>DueDate</li>
+        <li>Status (Choice: Open, In Prep, In Review, Complete, Overdue)</li><li>Period</li>
+      </ul>
+      <div style="background:var(--blue-light);padding:10px 12px;border-radius:var(--radius);font-size:12px;color:var(--blue);">
+        Tip: The "Title" column already exists in every SharePoint list — you can rename it or leave it. CloseTrack uses the columns listed above.
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-primary" onclick="closeModal('col-guide-modal')">Got it</button></div>
+  </div>
+</div>
+
+<!-- Main App -->
+<div id="main-app" class="app" style="display:none;">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">CloseTrack</div>
+      <div class="period-badge" id="sidebar-period">Mar 2026</div>
+    </div>
+    <div class="nav-section-label">Overview</div>
+    <div class="nav-item active" data-view="dashboard" onclick="nav('dashboard',this)"><span class="nav-icon">⊞</span> Dashboard</div>
+    <div class="nav-item" data-view="calendar" onclick="nav('calendar',this)"><span class="nav-icon">◻</span> Close Calendar</div>
+    <div class="nav-section-label">Work</div>
+    <div class="nav-item" data-view="je" onclick="nav('je',this)"><span class="nav-icon">◻</span> Journal Entries</div>
+    <div class="nav-item" data-view="recon" onclick="nav('recon',this)"><span class="nav-icon">◻</span> Reconciliations</div>
+    <div class="nav-item" data-view="checklist" onclick="nav('checklist',this)"><span class="nav-icon">◻</span> Checklist</div>
+    <div class="nav-section-label">Settings</div>
+    <div class="nav-item" data-view="setup" onclick="nav('setup',this)"><span class="nav-icon">◻</span> Connection</div>
+    <div class="nav-spacer"></div>
+    <div class="sidebar-footer">
+      <div class="user-row">
+        <div class="avatar av-blue" id="user-avatar">JS</div>
+        <div>
+          <div class="user-name" id="user-name">You</div>
+          <div class="user-role" id="user-role">Controller</div>
+        </div>
+      </div>
+      <div class="sp-status" id="sp-status-badge">
+        <span id="sp-status-dot">●</span> <span id="sp-status-text">Demo mode</span>
+      </div>
     </div>
   </div>
+
   <div class="main">
     <div class="topbar">
-      <div style="display:flex;align-items:center;gap:10px;">
+      <div class="topbar-left">
         <span class="view-title" id="view-title">Dashboard</span>
         <span class="chip chip-blue" id="period-chip">Mar 2026</span>
       </div>
-      <div style="display:flex;align-items:center;gap:12px;">
-        <div class="prog-wrap">
-          <span class="prog-label" id="prog-label">—</span>
-          <div class="prog-bar"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div class="progress-wrap">
+          <span class="progress-label" id="progress-label">—</span>
+          <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
         </div>
-        <button class="btn btn-sm" onclick="refreshAll()">↻ Refresh</button>
+        <button class="btn btn-sm" onclick="refreshData()" id="refresh-btn">↻ Refresh</button>
       </div>
     </div>
-    <div class="content" id="main-content"><div class="loading"><div class="spinner"></div> Loading…</div></div>
+    <div class="content" id="main-content">
+      <div class="loading"><div class="spinner"></div> Loading…</div>
+    </div>
   </div>
 </div>
 
-<!-- ADD/EDIT MODAL -->
-<div class="overlay" id="add-modal">
+<!-- Add/Edit Modal -->
+<div class="modal-overlay" id="add-modal">
   <div class="modal">
-    <div class="modal-head">
-      <div class="modal-title" id="modal-title">Add Item</div>
-      <button class="btn-icon" onclick="closeModal()">✕</button>
+    <div class="modal-header">
+      <div class="modal-title" id="add-modal-title">Add Item</div>
+      <button class="btn-icon" onclick="closeModal('add-modal')">✕</button>
     </div>
-    <div class="modal-body" id="modal-body"></div>
-    <div class="modal-foot">
-      <button class="btn" onclick="closeModal()">Cancel</button>
-      <button class="btn btn-primary" id="modal-save" onclick="submitForm()">Save</button>
+    <div class="modal-body" id="add-modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('add-modal')">Cancel</button>
+      <button class="btn btn-primary" id="add-modal-save" onclick="submitForm()">Save</button>
     </div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
 
-
-
 <script>
-
-const CLIENT_ID='e3b98a3c-3e59-4b0c-ba1a-08f9aafc4f25';
-const SCOPE='https://graph.microsoft.com/Sites.ReadWrite.All offline_access';
-
-const APP={
-  period:'March 2026',spUrl:'',isDemo:false,
-  accessToken:null,refreshToken:null,tokenExpiry:0,
-  siteId:null,listIds:{},
-  currentView:'dashboard',tabs:{},formType:null,editId:null,
-  data:{jes:[],recons:[],checklist:[]},
-  subTaskState:{},
-  pollTimer:null,_deviceCode:null,_deviceInterval:5
+// ─── CONFIG ───────────────────────────────────────────────────────────────────
+const APP = {
+  period: 'Mar 2026',
+  spSiteUrl: '',
+  isDemo: false,
+  isConnected: false,
+  accessToken: null,
+  currentView: 'dashboard',
+  currentTab: {},
+  formType: null,
+  editId: null,
+  data: { jes: [], recons: [], checklist: [] }
 };
 
-
-const DEMO={
-  jes:[
-    {id:1,Description:'Accrued payroll',Preparer:'JM',Reviewer:'AL',Status:'Complete',DueDate:'Mar 28',IntacctReference:'JE-2026-0312',ReversingIntacctReference:'JE-2026-0318',Recurring:true,Reversing:true,Period:'March 2026'},
-    {id:2,Description:'Prepaid insurance amortization',Preparer:'AL',Reviewer:'JM',Status:'In Review',DueDate:'Mar 28',IntacctReference:'',ReversingIntacctReference:'',Recurring:true,Reversing:false,Period:'March 2026'},
-    {id:3,Description:'Depreciation expense',Preparer:'RK',Reviewer:'JM',Status:'In Prep',DueDate:'Mar 29',IntacctReference:'',ReversingIntacctReference:'',Recurring:true,Reversing:false,Period:'March 2026'},
-    {id:4,Description:'Deferred revenue recognition',Preparer:'GL',Reviewer:'JM',Status:'Open',DueDate:'Mar 30',IntacctReference:'',ReversingIntacctReference:'',Recurring:false,Reversing:false,Period:'March 2026'},
-    {id:5,Description:'Interest expense accrual',Preparer:'AB',Reviewer:'GL',Status:'Overdue',DueDate:'Mar 27',IntacctReference:'',ReversingIntacctReference:'',Recurring:false,Reversing:true,Period:'March 2026'},
+const DEMO_DATA = {
+  jes: [
+    { id: 1, Description: 'Accrued payroll', Account: '2100 - Accrued Liabilities', Amount: 142500, Preparer: 'JS', Reviewer: 'MK', Status: 'Complete', DueDate: 'Mar 28', Period: 'Mar 2026' },
+    { id: 2, Description: 'Prepaid insurance amortization', Account: '1500 - Prepaid Expenses', Amount: 3200, Preparer: 'AL', Reviewer: 'JS', Status: 'In Review', DueDate: 'Mar 28', Period: 'Mar 2026' },
+    { id: 3, Description: 'Depreciation expense', Account: '6200 - Depreciation', Amount: 18750, Preparer: 'AL', Reviewer: 'JS', Status: 'In Prep', DueDate: 'Mar 29', Period: 'Mar 2026' },
+    { id: 4, Description: 'Deferred revenue recognition', Account: '2400 - Deferred Revenue', Amount: 25000, Preparer: 'MK', Reviewer: 'JS', Status: 'Open', DueDate: 'Mar 30', Period: 'Mar 2026' },
+    { id: 5, Description: 'Interest expense accrual', Account: '6500 - Interest Expense', Amount: 4100, Preparer: 'TW', Reviewer: 'MK', Status: 'Overdue', DueDate: 'Mar 27', Period: 'Mar 2026' },
   ],
-  recons:[
-    {id:1,Account:'1010 - Cash - Operating',GLBalance:1423500,SubBalance:1423500,Preparer:'AL',Reviewer:'JM',Status:'Complete',SignedPreparer:true,SignedReviewer:true,Period:'March 2026'},
-    {id:2,Account:'1200 - Accounts Receivable',GLBalance:892340,SubBalance:892340,Preparer:'JM',Reviewer:'GL',Status:'In Review',SignedPreparer:true,SignedReviewer:false,Period:'March 2026'},
-    {id:3,Account:'1500 - Prepaid Expenses',GLBalance:38400,SubBalance:41600,Preparer:'RK',Reviewer:'JM',Status:'In Prep',SignedPreparer:false,SignedReviewer:false,Period:'March 2026'},
-    {id:4,Account:'2000 - Accounts Payable',GLBalance:445200,SubBalance:445200,Preparer:'GL',Reviewer:'JM',Status:'Open',SignedPreparer:false,SignedReviewer:false,Period:'March 2026'},
-    {id:5,Account:'2100 - Accrued Liabilities',GLBalance:142500,SubBalance:142500,Preparer:'JM',Reviewer:'GL',Status:'In Prep',SignedPreparer:true,SignedReviewer:false,Period:'March 2026'},
-    {id:6,Account:'3000 - Common Stock',GLBalance:500000,SubBalance:500000,Preparer:'AL',Reviewer:'JM',Status:'Complete',SignedPreparer:true,SignedReviewer:true,Period:'March 2026'},
+  recons: [
+    { id: 1, Account: '1010 - Cash - Operating', GLBalance: 1423500, SubBalance: 1423500, Preparer: 'AL', Reviewer: 'JS', Status: 'Complete', SignedPreparer: true, SignedReviewer: true, Period: 'Mar 2026' },
+    { id: 2, Account: '1200 - Accounts Receivable', GLBalance: 892340, SubBalance: 892340, Preparer: 'JS', Reviewer: 'MK', Status: 'In Review', SignedPreparer: true, SignedReviewer: false, Period: 'Mar 2026' },
+    { id: 3, Account: '1500 - Prepaid Expenses', GLBalance: 38400, SubBalance: 41600, Preparer: 'TW', Reviewer: 'JS', Status: 'In Prep', SignedPreparer: false, SignedReviewer: false, Period: 'Mar 2026' },
+    { id: 4, Account: '2000 - Accounts Payable', GLBalance: 445200, SubBalance: 445200, Preparer: 'MK', Reviewer: 'JS', Status: 'Open', SignedPreparer: false, SignedReviewer: false, Period: 'Mar 2026' },
+    { id: 5, Account: '2100 - Accrued Liabilities', GLBalance: 142500, SubBalance: 142500, Preparer: 'JS', Reviewer: 'MK', Status: 'In Prep', SignedPreparer: true, SignedReviewer: false, Period: 'Mar 2026' },
+    { id: 6, Account: '3000 - Common Stock', GLBalance: 500000, SubBalance: 500000, Preparer: 'AL', Reviewer: 'JS', Status: 'Complete', SignedPreparer: true, SignedReviewer: true, Period: 'Mar 2026' },
   ],
-  checklist:[
-    {id:1,Task:'Pull TB from Sage Intacct',Category:'Data Pull',Owner:'AL',DueDate:'Mar 27',Status:'Complete',Period:'March 2026',SubTasks:'Export TB from Intacct|Verify all periods closed|Save to SharePoint',Comments:''},
-    {id:2,Task:'Bank statement tie-out',Category:'Cash',Owner:'RK',DueDate:'Mar 27',Status:'Overdue',Period:'March 2026',SubTasks:'Download bank statements|Tie to GL balance|Document outstanding items|Confirm deposits in transit',Comments:'Waiting on First Horizon to send March statement. RK following up 3/27.'},
-    {id:3,Task:'Post payroll JEs',Category:'Payroll',Owner:'JM',DueDate:'Mar 28',Status:'Complete',Period:'March 2026',SubTasks:'Confirm payroll amounts from provider|Post JE in Intacct|Update IntacctReference in CloseTrack'},
-    {id:4,Task:'Revenue recognition review',Category:'Revenue',Owner:'GL',DueDate:'Mar 28',Status:'In Review',Period:'March 2026',SubTasks:'Pull revenue report|Verify recognition schedule|Review deferred balances|Get reviewer sign-off',Comments:'Two contracts flagged for manual review — see email from GL on 3/26.'},
-    {id:5,Task:'Intercompany eliminations',Category:'Consolidation',Owner:'JM',DueDate:'Mar 29',Status:'In Prep',Period:'March 2026',SubTasks:'Run intercompany report|Post elimination entries|Confirm zero balance'},
-    {id:6,Task:'Flux analysis — P&L',Category:'Reporting',Owner:'GL',DueDate:'Mar 30',Status:'Open',Period:'March 2026',SubTasks:'Compare to prior month|Compare to budget|Document variances > 10%'},
-    {id:7,Task:'Flux analysis — Balance Sheet',Category:'Reporting',Owner:'JM',DueDate:'Mar 30',Status:'Open',Period:'March 2026',SubTasks:'Compare to prior month|Investigate unexpected changes|Document explanations'},
-    {id:8,Task:'CFO review package',Category:'Review',Owner:'JM',DueDate:'Mar 31',Status:'Open',Period:'March 2026',SubTasks:'Compile flux analysis|Prepare executive summary|Get controller sign-off|Send to CFO'},
+  checklist: [
+    { id: 1, Task: 'Pull TB from Sage Intacct', Category: 'Data Pull', Owner: 'AL', DueDate: 'Mar 27', Status: 'Complete', Period: 'Mar 2026' },
+    { id: 2, Task: 'Bank statement tie-out', Category: 'Cash', Owner: 'TW', DueDate: 'Mar 27', Status: 'Overdue', Period: 'Mar 2026' },
+    { id: 3, Task: 'Post payroll JEs', Category: 'Payroll', Owner: 'JS', DueDate: 'Mar 28', Status: 'Complete', Period: 'Mar 2026' },
+    { id: 4, Task: 'Revenue recognition review', Category: 'Revenue', Owner: 'MK', DueDate: 'Mar 28', Status: 'In Review', Period: 'Mar 2026' },
+    { id: 5, Task: 'Intercompany eliminations', Category: 'Consolidation', Owner: 'JS', DueDate: 'Mar 29', Status: 'In Prep', Period: 'Mar 2026' },
+    { id: 6, Task: 'Flux analysis — P&L', Category: 'Reporting', Owner: 'MK', DueDate: 'Mar 30', Status: 'Open', Period: 'Mar 2026' },
+    { id: 7, Task: 'Flux analysis — Balance Sheet', Category: 'Reporting', Owner: 'JS', DueDate: 'Mar 30', Status: 'Open', Period: 'Mar 2026' },
+    { id: 8, Task: 'CFO review package', Category: 'Review', Owner: 'JS', DueDate: 'Mar 31', Status: 'Open', Period: 'Mar 2026' },
   ]
 };
+
+// ─── SHAREPOINT / GRAPH API ───────────────────────────────────────────────────
+function getSiteHostAndPath(siteUrl) {
+  const url = new URL(siteUrl);
+  const host = url.hostname;
+  const path = url.pathname.replace(/\/$/, '');
+  return { host, path };
+}
+
+async function graphRequest(method, endpoint, body = null) {
+  if (!APP.accessToken) throw new Error('Not authenticated');
+  const opts = {
+    method,
+    headers: { 'Authorization': 'Bearer ' + APP.accessToken, 'Content-Type': 'application/json' }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch('https://graph.microsoft.com/v1.0' + endpoint, opts);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || 'Graph API error ' + res.status);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+async function getSiteId() {
+  if (APP.siteId) return APP.siteId;
+  const { host, path } = getSiteHostAndPath(APP.spSiteUrl);
+  const data = await graphRequest('GET', `/sites/${host}:${path}`);
+  APP.siteId = data.id;
+  return APP.siteId;
+}
+
+async function getListId(listName) {
+  if (!APP.listIds) APP.listIds = {};
+  if (APP.listIds[listName]) return APP.listIds[listName];
+  const siteId = await getSiteId();
+  const data = await graphRequest('GET', `/sites/${siteId}/lists/${listName}`);
+  APP.listIds[listName] = data.id;
+  return APP.listIds[listName];
+}
+
+async function getListItems(listName, period) {
+  const siteId = await getSiteId();
+  const listId = await getListId(listName);
+  const filter = period ? `fields/Period eq '${period}'` : '';
+  const url = `/sites/${siteId}/lists/${listId}/items?expand=fields&${filter ? '$filter=' + encodeURIComponent(filter) : ''}&$top=500`;
+  const data = await graphRequest('GET', url);
+  return (data.value || []).map(i => ({ id: i.id, ...i.fields }));
+}
+
+async function createListItem(listName, fields) {
+  const siteId = await getSiteId();
+  const listId = await getListId(listName);
+  const data = await graphRequest('POST', `/sites/${siteId}/lists/${listId}/items`, { fields });
+  return { id: data.id, ...data.fields };
+}
+
+async function updateListItem(listName, itemId, fields) {
+  const siteId = await getSiteId();
+  const listId = await getListId(listName);
+  await graphRequest('PATCH', `/sites/${siteId}/lists/${listId}/items/${itemId}/fields`, fields);
+}
+
+async function deleteListItem(listName, itemId) {
+  const siteId = await getSiteId();
+  const listId = await getListId(listName);
+  await graphRequest('DELETE', `/sites/${siteId}/lists/${listId}/items/${itemId}`);
+}
+
+// ─── AUTH (MSAL) ──────────────────────────────────────────────────────────────
+async function signInMsal() {
+  // Uses MSAL with a public client — works for personal/work M365 accounts
+  const msalConfig = {
+    auth: {
+      clientId: 'e3b98a3c-3e59-4b0c-ba1a-08f9aafc4f25', // CloseTrack app (registered for public use)
+      authority: 'https://login.microsoftonline.com/common',
+      redirectUri: window.location.href.split('?')[0]
+    }
+  };
+  try {
+    const msalInstance = new msal.PublicClientApplication(msalConfig);
+    await msalInstance.initialize();
+    const result = await msalInstance.loginPopup({
+      scopes: ['Sites.ReadWrite.All', 'User.Read']
+    });
+    APP.accessToken = result.accessToken;
+    // Get user info
+    const me = await graphRequest('GET', '/me');
+    APP.userName = me.displayName || me.userPrincipalName;
+    APP.userInitials = (me.displayName || 'U').split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+    return true;
+  } catch (e) {
+    console.error('MSAL error', e);
+    return false;
+  }
+}
+
+// ─── DATA LAYER ───────────────────────────────────────────────────────────────
+async function loadAllData() {
+  if (APP.isDemo) {
+    APP.data = {
+      jes: [...DEMO_DATA.jes],
+      recons: [...DEMO_DATA.recons],
+      checklist: [...DEMO_DATA.checklist]
+    };
+    return;
+  }
+  try {
+    const [jes, recons, checklist] = await Promise.all([
+      getListItems('CT_JournalEntries', APP.period),
+      getListItems('CT_Reconciliations', APP.period),
+      getListItems('CT_Checklist', APP.period)
+    ]);
+    APP.data = { jes, recons, checklist };
+  } catch(e) {
+    showToast('Error loading from SharePoint: ' + e.message, 'error');
+    // fallback to demo
+    APP.data = { jes: [...DEMO_DATA.jes], recons: [...DEMO_DATA.recons], checklist: [...DEMO_DATA.checklist] };
+  }
+}
+
+async function saveItem(type, fields, editId = null) {
+  if (APP.isDemo) {
+    // Demo: update in-memory only
+    const list = APP.data[type];
+    if (editId !== null) {
+      const idx = list.findIndex(i => i.id == editId);
+      if (idx >= 0) list[idx] = { ...list[idx], ...fields };
+    } else {
+      const newId = Math.max(0, ...list.map(i => parseInt(i.id) || 0)) + 1;
+      list.push({ id: newId, ...fields });
+    }
+    return;
+  }
+  const listName = type === 'jes' ? 'CT_JournalEntries' : type === 'recons' ? 'CT_Reconciliations' : 'CT_Checklist';
+  if (editId) {
+    await updateListItem(listName, editId, fields);
+    const idx = APP.data[type].findIndex(i => i.id == editId);
+    if (idx >= 0) APP.data[type][idx] = { ...APP.data[type][idx], ...fields };
+  } else {
+    const created = await createListItem(listName, { ...fields, Period: APP.period });
+    APP.data[type].push(created);
+  }
+}
+
+async function patchItem(type, id, fields) {
+  if (APP.isDemo) {
+    const list = APP.data[type];
+    const idx = list.findIndex(i => i.id == id);
+    if (idx >= 0) Object.assign(list[idx], fields);
+    return;
+  }
+  const listName = type === 'jes' ? 'CT_JournalEntries' : type === 'recons' ? 'CT_Reconciliations' : 'CT_Checklist';
+  await updateListItem(listName, id, fields);
+  const idx = APP.data[type].findIndex(i => i.id == id);
+  if (idx >= 0) Object.assign(APP.data[type][idx], fields);
+}
+
+// ─── SETUP ────────────────────────────────────────────────────────────────────
 
 const REAL={
   jes:[{"id":6000,"Description":"Accrual of Franchise Taxes","Preparer":"JM","Reviewer":"GL","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":true,"Reversing":false,"ReversingIntacctReference":""},{"id":6001,"Description":"Accrual of P Card Rebate","Preparer":"JM","Reviewer":"GL","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":true,"Reversing":false,"ReversingIntacctReference":""},{"id":6002,"Description":"Accrue Collins Growth Bonus","Preparer":"JM","Reviewer":"GL","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":true,"Reversing":false,"ReversingIntacctReference":""},{"id":6003,"Description":"Accrue Shared Savings Bonus - Dr. Goad","Preparer":"JM","Reviewer":"GL","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":true,"Reversing":false,"ReversingIntacctReference":""},{"id":6004,"Description":"ACO Shared Savings Revenue Accrual 2026","Preparer":"JM","Reviewer":"GL","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":true,"Reversing":false,"ReversingIntacctReference":""},{"id":6005,"Description":"Amortization of Finance Charges","Preparer":"AB","Reviewer":"JM","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":true,"Reversing":false,"ReversingIntacctReference":""},{"id":6006,"Description":"Amortization of Goodwill","Preparer":"AB","Reviewer":"JM","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":true,"Reversing":false,"ReversingIntacctReference":""},{"id":6007,"Description":"Amortization of Tradename","Preparer":"AB","Reviewer":"JM","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":true,"Reversing":false,"ReversingIntacctReference":""},{"id":6009,"Description":"Shared Savings Cost Accruals","Preparer":"RK","Reviewer":"JM","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":true,"Reversing":false,"ReversingIntacctReference":""},{"id":6010,"Description":"Accrued Interest on General Atlantic Sixth Street Lending Partners Loan","Preparer":"AB","Reviewer":"JM","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":true,"ReversingIntacctReference":""},{"id":6011,"Description":"Bank of New York Mellon Timing Difference","Preparer":"AB","Reviewer":"JM","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":true,"ReversingIntacctReference":""},{"id":6012,"Description":"Depreciation expense","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6013,"Description":"Correct Payroll Allocation between SE and VA","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 1","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6014,"Description":"EPH WV Sertus Cash/AR Reclass (1210)","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6015,"Description":"EWH VA Sertus Cash/AR Reclass (1200)","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6016,"Description":"EWH WH SE Sertus Cash/AR Reclass (400)","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6017,"Description":"MW (ACO) Sertus Cash/AR Reclass","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6018,"Description":"MW (ACO) SertusCash/AR Reclass (1130)","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6019,"Description":"MW (ECS) Sertus Cash/AR Reclass","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6020,"Description":"VISA CC Expense","Preparer":"AW","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6021,"Description":"FY 26 Bonus Accrual for FI - RD","Preparer":"RK","Reviewer":"JM","DueDate":"Mar 31","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6022,"Description":"MD Allowance Accrual","Preparer":"AB","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":true,"ReversingIntacctReference":""},{"id":6023,"Description":"MD Payroll Accrual","Preparer":"AB","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":true,"ReversingIntacctReference":""},{"id":6024,"Description":"Medical Claims Cash Reserve Transfer","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6025,"Description":"Medical Insurance Reserve","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 1","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6026,"Description":"Misc Pharmacy Billing Accrual (based on prior month actual)","Preparer":"AB","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":true,"ReversingIntacctReference":""},{"id":6027,"Description":"MW Misc Billing Accrual (based on prior month actual)","Preparer":"AB","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":true,"ReversingIntacctReference":""},{"id":6028,"Description":"Reclass Ambience","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6029,"Description":"Reclass AR and Allowance balance for CompMed TIN","Preparer":"AB","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6030,"Description":"Reclass Assembly Payments not yet applied","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6031,"Description":"Reclass Bank Fees recorded to 1120","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6032,"Description":"Reclass Chartpath","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6033,"Description":"Reclass Depreciation Expense Department","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6034,"Description":"Reclass Sertus Suspense Variances","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6035,"Description":"Reclass Suspense from Sertus to Assembly","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6036,"Description":"Record funding for LLC Benefit account","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 8","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6037,"Description":"SE Sertus Cash/AR Reclass","Preparer":"JM","Reviewer":"GL","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6038,"Description":"Shared Savings Quality Bonus Accrual","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 1","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6039,"Description":"To reclass Analytic Wages to CIP for Datawarehouse Project","Preparer":"AB","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6040,"Description":"To reclass bank fees to correct department","Preparer":"AB","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6041,"Description":"To Reclass payment made in Bill with Divvy Card - Chartpath","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6042,"Description":"To Record Charges to Divvy CC","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 1","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6043,"Description":"To Record Wire from SSLP Lending, LLC","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 7","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6044,"Description":"Reclass Wex","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6045,"Description":"Reclass Suki","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6046,"Description":"PTO Hourly Accrual","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6047,"Description":"AP Accrual","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6048,"Description":"AP Non Reversing Accrual","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 6","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""},{"id":6049,"Description":"Add Back Category Reclass JE","Preparer":"RK","Reviewer":"JM","DueDate":"Apr 10","Status":"Open","Period":"March 2026","IntacctReference":"","Recurring":false,"Reversing":false,"ReversingIntacctReference":""}],
@@ -310,209 +564,566 @@ const REAL={
   checklist:[{"id":5000,"Task":"Reclass AP invoices to correct dimensions","Category":"Accounts Payable","Owner":"RK","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"WEX | Ambience | Chartpath | Suki, AI","Comments":""},{"id":5001,"Task":"Prepare Variance Analysis file","Category":"Monthly Tasks","Owner":"JM","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"","Comments":"Gina to notify to Jenn when we can begin review."},{"id":5002,"Task":"Next Gen Revenue","Category":"Revenue","Owner":"AB","DueDate":"Apr 9","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5003,"Task":"APCM Accrual - Reaccrue 2025 and Jan 2026","Category":"Revenue","Owner":"GL","DueDate":"Apr 7","Status":"Open","Period":"March 2026","SubTasks":"Accrue 2026 Current Month | Reaccrue Jan / Feb 2026 | Re Accrue 2025 | Reaccrue 2025 Physician reversal","Comments":""},{"id":5004,"Task":"Acquisition Bonus Accruals","Category":"Monthly Tasks","Owner":"AB","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"Dr. Goad Bonus - Gina is working to find out the amount | Bulter $13.5% to cover taxes & Butler 2026 Acq Bonus Starting in Feb when doc signed | Collins Growth Bonus","Comments":"Nothing yet for Feb for Butler. Address again in March"},{"id":5005,"Task":"Accrue Provider Quality Bonus (MSSP/VBC/ACO) Changes each Month","Category":"Payroll","Owner":"RK","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"","Comments":"Copy from prior month and update amounts based on file saved in 2026 ME folder"},{"id":5006,"Task":"Dirk / Provectus TSA Reconciliation and Accrual","Category":"Accounts Payable","Owner":"GL","DueDate":"","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5007,"Task":"Save EOM Reports from Sertus","Category":"Monthly Tasks","Owner":"AB","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"EWH SE ACO | EWH | Premier WV | Eventus ECS | ECS | MW ACO | Premier VA","Comments":""},{"id":5008,"Task":"Post PurEDI Real Rev JE's","Category":"Revenue","Owner":"AB","DueDate":"Apr 7","Status":"Open","Period":"March 2026","SubTasks":"Post Actual Charges | Post Estimated Contractual & Write Off Reserves on Accrued Charges | Post Adjustments Accrual | Post Actual Adjustments | Post Charges Accrual (Lag Charges) | Post Estimated Contractual & Write Off Reserves","Comments":""},{"id":5009,"Task":"Post AMD Real Rev JE's","Category":"Revenue","Owner":"AB","DueDate":"Apr 7","Status":"Open","Period":"March 2026","SubTasks":"Post Actual Charges | Post Estimated Contractual & Write Off Reserves on Accrued Charges | Post Actual Adjustments | Post Charges Accrual (Lag Charges) | Post Estimated Contractual & Write Off Reserves | Post Adjustments Accrual","Comments":""},{"id":5010,"Task":"MOR package; Verify TTM addbacks","Category":"Reports","Owner":"RK","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5011,"Task":"Review CC Assignees Report","Category":"Monthly Tasks","Owner":"AW, RK","DueDate":"Apr 15","Status":"Open","Period":"March 2026","SubTasks":"","Comments":"\"Pull report of all credit card holders from FH Review for termed employees with active cards Review unsubmitted expenses and reports\""},{"id":5012,"Task":"Review Add Back Categories","Category":"Monthly Tasks","Owner":"RK","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"Racheal | Gina - Legal Expenses","Comments":"\"Review legal expense - Ask GL about Sign on Bonuses Retention Bonus  Severance Rent Expense - entry booked Accrued franchise BDO Transaction Cost Analysis RPM Healthcare invoices\""},{"id":5013,"Task":"Amortization of Tradename","Category":"Amortization and Depreciation","Owner":"AB","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5014,"Task":"Expense Analysis","Category":"Review","Owner":"","DueDate":"","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5015,"Task":"Variance Analysis","Category":"Reports","Owner":"","DueDate":"","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5016,"Task":"Weekly and Departmental P&L","Category":"Reports","Owner":"","DueDate":"","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5017,"Task":"Send out MD/Misc Statements","Category":"Monthly Tasks","Owner":"AB","DueDate":"Apr 15","Status":"Open","Period":"March 2026","SubTasks":"Misc Statements | MD Statements","Comments":"Send statements to facilities to ensure they have a statement of what is owed in total on the account."},{"id":5018,"Task":"Financial Statement Review","Category":"Review","Owner":"JM, RK, AB, GL","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"review 1120 P&L should no longer be posting JE's here","Comments":""},{"id":5019,"Task":"Reconcile Cash Held for Employee Benefits Account -First Horizon","Category":"Cash","Owner":"RK","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"106600 FH 9857 | 105400 FH 2358 | 101860 FH 8119 | 101400 FH 1168","Comments":""},{"id":5020,"Task":"Self-Funding Health Ins Medical Benefits: Expense","Category":"Accounts Payable","Owner":"RK","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5021,"Task":"Self-Funding Health Ins Medical Benefits: Funding","Category":"Cash","Owner":"RK","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"","Comments":"This is funding the benefit accounts."},{"id":5022,"Task":"Reconcile Bank of NY Mellon Cash Account","Category":"Cash","Owner":"AB","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5023,"Task":"AR Suspense","Category":"Cash","Owner":"JM","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"EPH WV (1210) | EWH Southeast (400) | Review Sertus Expense and reclass any Assembly Prior Period Receipts  | EWH (100) | Review Assembly suspense and adjust where necessary   | ECS (1110) | EPH VA (1200) | EVC (500) | ACO (4300) | Eventus ECS (1130)","Comments":"Review Sertus Suspense and Reclass any Assembly identified prior period receipts to Assembly Suspense"},{"id":5024,"Task":"Accrue Facility Engagement Bonus (Shared Savings/VBC/ACO)","Category":"Payroll","Owner":"JM","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5025,"Task":"Record Revenue for the ISNP","Category":"Revenue","Owner":"AB","DueDate":"Apr 7","Status":"Open","Period":"March 2026","SubTasks":"Revenue | Accrued Revenue","Comments":"Should get picked up in bank integration"},{"id":5026,"Task":"PTO Hourly Accrual","Category":"Payroll","Owner":"RK","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5027,"Task":"Record Mid Atlantic LTC/ACO COMPMED Charges and Allowance","Category":"Revenue","Owner":"AB","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5028,"Task":"13 Week Cash Forecast for Monthly Reporting Package","Category":"Reports","Owner":"AB","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5029,"Task":"Review Escheats for Dormancy","Category":"Monthly Tasks","Owner":"AW","DueDate":"Apr 15","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5030,"Task":"Accrue Interest after Cutoff","Category":"Monthly Tasks","Owner":"AB","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"","Comments":"Calculate -  Paying quarterly"},{"id":5031,"Task":"Post Payroll accrual for Log payments","Category":"Payroll","Owner":"AB","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"EWH | KY PAC | Premier (logs not required |  paid 100%) | VA Quinn | ECS | Provectus","Comments":""},{"id":5032,"Task":"Send MD Payroll based on logs submitted","Category":"Payroll","Owner":"AB","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"KY PAC | SE | Provectus | VA Quinn | Premier | MW","Comments":""},{"id":5033,"Task":"Check Unassigned dimensions","Category":"Review","Owner":"JM","DueDate":"Apr 9","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5034,"Task":"Reclass Current Portion of LTD","Category":"Quarterly Tasks","Owner":"AB","DueDate":"Apr 2","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5035,"Task":"MSA BS & Interco Reclass, ECS, Premier, PLLC","Category":"Annual Tasks","Owner":"","DueDate":"","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5036,"Task":"SOS Filings","Category":"Annual Tasks","Owner":"","DueDate":"","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5037,"Task":"Real and Personal Property Tax Returns/Payments","Category":"Annual Tasks","Owner":"","DueDate":"","Status":"Open","Period":"March 2026","SubTasks":"VA? | Indiana | Cabarrus | Durham","Comments":""},{"id":5038,"Task":"Franchise Tax Accrual SE GJ","Category":"Accounts Payable","Owner":"RK","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5039,"Task":"Verify All Charges to 5000 have been allocated","Category":"Allocations","Owner":"RK","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5040,"Task":"Send New Vendors to Emna for Compliance Testing","Category":"Monthly Tasks","Owner":"AW","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5041,"Task":"Mid Atlantic LTC/ACO COMPMED Revenue and Allowance Accrual","Category":"Revenue","Owner":"AB","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5042,"Task":"Review reports by discipline after Allocations and make any adjs","Category":"Reports","Owner":"AB, JM, RK","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5043,"Task":"Account AR Review for MD and Misc.","Category":"Monthly Tasks","Owner":"JM","DueDate":"Apr 13","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5044,"Task":"Reclass Employee WH account balances to Expense","Category":"Payroll","Owner":"RK","DueDate":"Apr 8","Status":"Open","Period":"March 2026","SubTasks":"Dental/Vision - Met Life | Life - UNUM | Medical - INDECS","Comments":""},{"id":5045,"Task":"Post all Misc. Charges for Prior Month","Category":"Revenue","Owner":"AB","DueDate":"Apr 2","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5046,"Task":"Reconcile Lockbox Account - Webster","Category":"Cash","Owner":"RK","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"Webster 7468 | Webster 7363","Comments":""},{"id":5047,"Task":"Reconcile All Payroll Accounts","Category":"Cash","Owner":"RK","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"Mgmt 2288 | MW 5789 | MW FH 6552 | PLLC 1077 | Premier 2113","Comments":""},{"id":5048,"Task":"Reconcile Lockbox Accounts - First Horizon","Category":"Cash","Owner":"AB","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"ECS 9817 | Mid-Atlantic 4213 | SE SC 0060 | EWH MA 029 | EWH Midwest Care 8534 | Eventus MM 6552 | WV2272 | SE LLC 9395 | Medicare 1175| Premier 2092 | ECS INC 9773 | 0614 | Premier 2302 | ACO 2001 | Commercial 1203","Comments":""},{"id":5049,"Task":"Reconcile Lockbox Accounts - PNC","Category":"Cash","Owner":"AB","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"Medicare/Medicaid 2577 | Patient 6431 | PNC Operating 0793","Comments":""},{"id":5050,"Task":"Reconcile Operating Accounts","Category":"Cash","Owner":"RK","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"FH Operating 2253","Comments":""},{"id":5051,"Task":"Check for Mismatch of Revenue and Wages on Accounts and Dimensions","Category":"Review","Owner":"JM, RK","DueDate":"Apr 9","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5052,"Task":"Send Draft to CFO","Category":"Review","Owner":"GJ","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5053,"Task":"Review P&L with Finance","Category":"Review","Owner":"GJ","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5054,"Task":"Misc AR to Leadership","Category":"Reports","Owner":"AB","DueDate":"Apr 15","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5055,"Task":"MD Report to Leadership","Category":"Reports","Owner":"AB","DueDate":"Apr 15","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5056,"Task":"AR Reconcile","Category":"Reconciliations","Owner":"JM","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"ACO | ECS | EWH | ECS New ACO 1130 | Premier Mid Atlantic Care 1230 (CompMed) | Premier 1200 | Tie out Allowance | EHP WV 1210 | Tie out AR for PM | EWH SD 400","Comments":""},{"id":5057,"Task":"Create Monthly Cash Forecast","Category":"Reports","Owner":"AB","DueDate":"","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5058,"Task":"Populate Monthly Reporting Workbook","Category":"Reports","Owner":"AB","DueDate":"Apr 13","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5059,"Task":"Check for Mismatch between entity and state","Category":"Review","Owner":"JM","DueDate":"Apr 9","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5060,"Task":"Check Concur posting dimensions","Category":"Review","Owner":"RK","DueDate":"Apr 8","Status":"Open","Period":"March 2026","SubTasks":"Check Posting Dimensions | Check Coding for 2026 budget","Comments":""},{"id":5061,"Task":"Cash Receipts for Misc.","Category":"Cash","Owner":"AB","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"Tie to Sertus | Ensure back up is attached in Intacct and saved under the cash folder","Comments":""},{"id":5062,"Task":"Misc. Allowance Adjustment","Category":"Revenue","Owner":"AB","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5063,"Task":"MD Allowance Adjustment","Category":"Revenue","Owner":"AB","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"KY PAC | SE | VA Quinn | MW | Premier | Provectus","Comments":""},{"id":5064,"Task":"Accrue Misc. Charges Current Month","Category":"Revenue","Owner":"AB","DueDate":"Apr 2","Status":"Open","Period":"March 2026","SubTasks":"Post Accrual entry and set up to reverse | Verify invoices are posted to the correct dimmensions","Comments":""},{"id":5065,"Task":"Reconcile AR Cash Receipts","Category":"Cash","Owner":"JM","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"EVC (500) | ECS (1110) | ACO (4300) | EPH WV (1210) | EPH VA (1200) | EWH SE ACO (400) | Eventus ECS (1130) | Tie out Assembly to Sertus | EWH (100)","Comments":"\"MD Receipts Misc Receipts Oher Receipts Sertus Receipts\""},{"id":5066,"Task":"Post All MD invoices","Category":"Revenue","Owner":"AB","DueDate":"Apr 2","Status":"Open","Period":"March 2026","SubTasks":"Apgar | Williams | Premier | MW | KY PAC | SE | Provectus | VA Quinn","Comments":""},{"id":5067,"Task":"Post All Empower 401K Transactions (Bank Integration)","Category":"Payroll","Owner":"RK","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"","Comments":"Weekly/Depending on off cycle"},{"id":5068,"Task":"Verify CCM Billed for PM","Category":"Revenue","Owner":"AB","DueDate":"Apr 7","Status":"Open","Period":"March 2026","SubTasks":"EWH (AMD) | Premier - VA (PurEDI) | ECS (AMD) | SE ACO (PurEDI) | Eventus ECS (PurEDI)","Comments":"Go into query and check CCM billed (prior month date of service, current billing period)"},{"id":5069,"Task":"Revenue Reconcilement","Category":"Reconciliations","Owner":"AB","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5070,"Task":"CCM Accrual and Allowance from Finance Estimate","Category":"Revenue","Owner":"AB","DueDate":"Apr 7","Status":"Open","Period":"March 2026","SubTasks":"SE ACO Accrual | MW ACO Accrual | ECS Accrual | SE ACO Allowance | MW ACO Allowance | EWH Accrual | EWH Allowance | ECS Allowance","Comments":""},{"id":5071,"Task":"Shared Savings Revenue Accrual","Category":"Revenue","Owner":"AB","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"VB ACO SS | LTC ACO SS","Comments":""},{"id":5072,"Task":"FI Bonus Accrual SE PJ","Category":"Payroll","Owner":"RK","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5073,"Task":"SG&A Bonus Accrual GJ","Category":"Payroll","Owner":"RK","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5074,"Task":"Accrue P Card Rebate SE GJ","Category":"Accounts Payable","Owner":"RK","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5075,"Task":"Accrue First Horizon Credit Card","Category":"Accounts Payable","Owner":"RK","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5076,"Task":"Post Non Reversing Accruals","Category":"Accounts Payable","Owner":"RK","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"Accounting Fees - Audit and Tax | Employee Meetings and Events","Comments":""},{"id":5077,"Task":"Post AP Reversing Accrual","Category":"Accounts Payable","Owner":"RK","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"Cosan | Unum | Zus Health | Verizon | Legal | Elastic | Monthly UKG Overage | Time Doc | Chartpath | Sertus | Check AP invoice list for any not posted","Comments":""},{"id":5078,"Task":"Close AP Subledger","Category":"Accounts Payable","Owner":"JM","DueDate":"Apr 9","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5079,"Task":"Reconcile AP Subledger to GL and Bill.com","Category":"Accounts Payable","Owner":"RK","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5080,"Task":"Post All Invoices with ME GL Posting Date","Category":"Accounts Payable","Owner":"AW","DueDate":"Apr 3","Status":"Open","Period":"March 2026","SubTasks":"Elastic Mthly svc | ActivTrak | Waterloo | Delta Dental (3 inv) | Imagine360 | Checkr | HealthMark | PicassoMD | Sertus/Assembly | RPM | McDermott | UKG Qrly | Wex | Hallmark | Husch Blackwell | Awardco | TimeDoc | Ropes & Gray | Constellation | Assembly","Comments":""},{"id":5081,"Task":"Update ROU Asset and Amortization","Category":"Amortization and Depreciation","Owner":"RK","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5082,"Task":"Amortize Finance Charges SE GJ","Category":"Amortization and Depreciation","Owner":"AB","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5083,"Task":"Amortize Goodwill SE GJ","Category":"Amortization and Depreciation","Owner":"AB","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5084,"Task":"Amortize Other Prepaid","Category":"Amortization and Depreciation","Owner":"AB","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5085,"Task":"Amortize Prepaid Insurance","Category":"Amortization and Depreciation","Owner":"AB","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5086,"Task":"Post Depreciation and FA JEs","Category":"Amortization and Depreciation","Owner":"JM","DueDate":"Apr 6","Status":"Open","Period":"March 2026","SubTasks":"Post Depreciation | Review laptops to Roster to dispose laptops","Comments":""},{"id":5087,"Task":"Review Allowance for reasonableness","Category":"Revenue","Owner":"JM","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"ECS | Premier ACO - Compmed? | SE ACO | MW ACO | Premier | EWH","Comments":""},{"id":5088,"Task":"MD Payroll Accrual - Receipts Prior to July 2024 (If Any)","Category":"Payroll","Owner":"AB","DueDate":"Apr 2","Status":"Open","Period":"March 2026","SubTasks":"MD Payroll - 100 | OH Provectus | MD Payroll - 1110","Comments":"\"No Receipts prior to July 2024. Only non Premier\""},{"id":5089,"Task":"CCM Payroll Accrual","Category":"Payroll","Owner":"RK","DueDate":"Apr 2","Status":"Open","Period":"March 2026","SubTasks":"MA Bonus - 100 | MA Bonus - 1110","Comments":"Copy prior month entry and use payroll GL details (MA bonus - support)"},{"id":5090,"Task":"Post productivity allocation for provider accrual","Category":"Payroll","Owner":"RK","DueDate":"Apr 9","Status":"Open","Period":"March 2026","SubTasks":"Productivity Accrual - 100 | Productivity Accrual - 1110","Comments":""},{"id":5091,"Task":"Accrue productivity wages for revenue accrual","Category":"Payroll","Owner":"JM","DueDate":"Apr 10","Status":"Open","Period":"March 2026","SubTasks":"SE ACO | Premier | EWH | ECS | Check for Duplicates | Premier ACO (CompMed) | Eventus ECS","Comments":"For Premier make sure that VA Quinn & KY PAC are going to the correct substate."},{"id":5092,"Task":"Accrue payroll","Category":"Payroll","Owner":"RK","DueDate":"Apr 7","Status":"Open","Period":"March 2026","SubTasks":"Mgmt - 200 | Provider - 1110 | Provider - 100 | Premier - 1200","Comments":""},{"id":5093,"Task":"Post productivity allocations to Intacct","Category":"Payroll","Owner":"RK","DueDate":"Apr 1","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""},{"id":5094,"Task":"Post all pay runs to Intacct","Category":"Payroll","Owner":"RK","DueDate":"Mar 31","Status":"Open","Period":"March 2026","SubTasks":"","Comments":""}]
 };;
 
-// INIT
-window.addEventListener('DOMContentLoaded', function() {
-  try {
-    var saved = localStorage.getItem('ct_v2');
-    if (saved) {
-      try {
-        var cfg = JSON.parse(saved);
-        APP.period = cfg.period || 'March 2026';
-        APP.isDemo = cfg.isDemo || false;
-        APP.userName = cfg.userName || '';
-        APP.userInitials = cfg.userInitials || 'U';
-      } catch(e) {
-        localStorage.removeItem('ct_v2');
-      }
-    }
-    if (APP.isDemo) {
-      launchApp();
-    } else {
-      showSetup();
-    }
-  } catch(e) {
-    showSetup();
+window.addEventListener('DOMContentLoaded', () => {
+  const saved = localStorage.getItem('ct_config');
+  if (saved) {
+    const cfg = JSON.parse(saved);
+    APP.spSiteUrl = cfg.spSiteUrl || '';
+    APP.period = cfg.period || 'Mar 2026';
+    APP.isDemo = cfg.isDemo || false;
+  }
+  if (APP.isDemo || APP.spSiteUrl) {
+    launchApp();
+  } else {
+    document.getElementById('setup-screen').style.display = 'flex';
   }
 });
 
+async function connectSharePoint() {
+  const urlInput = document.getElementById('sp-url-input')?.value?.trim() || 'https://eventuswh.sharepoint.com/sites/ConsolidatedEntityMonthEndRecons';
+  const period = document.getElementById('period-input')?.value?.trim() || 'March 2026';
+  const errEl = document.getElementById('setup-error');
+  if(errEl) errEl.style.display = 'none';
 
-function showSetup(){
-  document.getElementById('setup-screen').style.display='flex';
-  document.getElementById('device-screen').style.display='none';
-  document.getElementById('main-app').style.display='none';
+  APP.spSiteUrl = urlInput;
+  APP.period = period;
+  APP.isDemo = false;
+
+  // Use OAuth2 implicit flow - no external library needed
+  const redirectUri = window.location.href.split('?')[0].split('#')[0];
+  const authUrl = 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize' +
+    '?client_id=e3b98a3c-3e59-4b0c-ba1a-08f9aafc4f25' +
+    '&response_type=token' +
+    '&redirect_uri=' + encodeURIComponent(redirectUri) +
+    '&scope=' + encodeURIComponent('https://graph.microsoft.com/Sites.ReadWrite.All User.Read') +
+    '&response_mode=fragment' +
+    '&prompt=select_account';
+
+  showToast('Opening Microsoft sign-in...', 'success');
+  const popup = window.open(authUrl, 'msauth', 'width=500,height=600,left=200,top=100');
+
+  if (!popup || popup.closed) {
+    if(errEl){ errEl.textContent = 'Popup was blocked. Please allow popups for this site and try again, or use Demo Mode.'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  const checkInterval = setInterval(() => {
+    try {
+      if (popup.closed) {
+        clearInterval(checkInterval);
+        if(errEl){ errEl.textContent = 'Sign-in window closed. Try again or use Demo Mode.'; errEl.style.display = 'block'; }
+        return;
+      }
+      const hash = popup.location.hash;
+      if (hash && hash.includes('access_token')) {
+        clearInterval(checkInterval);
+        popup.close();
+        const params = new URLSearchParams(hash.substring(1));
+        APP.accessToken = params.get('access_token');
+        APP.tokenExpiry = Date.now() + (parseInt(params.get('expires_in') || '3600') - 60) * 1000;
+        APP.isConnected = true;
+        // Get user info
+        graphRequest('GET', '/me').then(me => {
+          if (me) {
+            APP.userName = me.displayName || me.userPrincipalName || 'You';
+            APP.userInitials = (me.displayName || 'U').split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase();
+          }
+          localStorage.setItem('ct_config', JSON.stringify({ spSiteUrl: APP.spSiteUrl, period: APP.period, isDemo: false, accessToken: APP.accessToken, tokenExpiry: APP.tokenExpiry }));
+          launchApp();
+        }).catch(() => {
+          localStorage.setItem('ct_config', JSON.stringify({ spSiteUrl: APP.spSiteUrl, period: APP.period, isDemo: false }));
+          launchApp();
+        });
+      }
+    } catch(e) { /* popup still on Microsoft page, keep waiting */ }
+  }, 500);
+
+  setTimeout(() => {
+    clearInterval(checkInterval);
+    if (!popup.closed) popup.close();
+  }, 120000);
 }
 
-// LOCAL STORAGE DATA LAYER — works from any browser, no auth needed
-// DATA STORAGE — localStorage, works from any browser anywhere
-const STORE_KEY = 'ct_data_v1';
-
-async function loadMSAL(){ return true; } // No longer needed
-
-async function startDeviceFlow(){
-  const period = document.getElementById('sp-period')?.value?.trim() || 'March 2026';
-  const username = document.getElementById('sp-username')?.value?.trim() || 'You';
-  APP.period = period;
-  APP.spUrl = 'https://eventuswh.sharepoint.com/sites/ConsolidatedEntityMonthEndRecons';
-  APP.isDemo = false;
-  APP.userName = username;
-  APP.userInitials = username.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase() || 'U';
-  APP.useSharePoint = false;
-  saveConfig();
+function useDemoMode() {
+  APP.isDemo = true;
+  APP.period = document.getElementById('period-input').value.trim() || 'Mar 2026';
+  localStorage.setItem('ct_config', JSON.stringify({ isDemo: true, period: APP.period }));
   launchApp();
 }
 
+async function launchApp() {
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('main-app').style.display = 'flex';
+  updateSpStatus();
+  document.getElementById('sidebar-period').textContent = APP.period;
+  document.getElementById('period-chip').textContent = APP.period;
+  document.getElementById('user-name').textContent = APP.userName || (APP.isDemo ? 'Demo User' : 'You');
+  document.getElementById('user-avatar').textContent = APP.userInitials || (APP.isDemo ? 'DU' : 'U');
+  await refreshData();
+}
 
-async function reconnect(){
-  // Connect to SharePoint using OAuth popup
-  APP.spUrl='https://eventuswh.sharepoint.com/sites/ConsolidatedEntityMonthEndRecons';
-  APP.siteId=null;APP.listIds={};
-  try{
-    const state=Math.random().toString(36).substring(7);
-    const redirectUri=window.location.href.split('?')[0].split('#')[0];
-    const authUrl='https://login.microsoftonline.com/common/oauth2/v2.0/authorize'+
-      '?client_id='+CLIENT_ID+
-      '&response_type=token'+
-      '&redirect_uri='+encodeURIComponent(redirectUri)+
-      '&scope='+encodeURIComponent('https://graph.microsoft.com/Sites.ReadWrite.All User.Read')+
-      '&response_mode=fragment'+
-      '&state='+state+
-      '&prompt=select_account';
-    showToast('Opening Microsoft sign-in window…','success');
-    const popup=window.open(authUrl,'msauth','width=500,height=600,left=200,top=100');
-    if(!popup){
-      showToast('Popup blocked — please allow popups for this site and try again','error');
-      return;
+function updateSpStatus() {
+  const badge = document.getElementById('sp-status-badge');
+  const text = document.getElementById('sp-status-text');
+  badge.className = 'sp-status';
+  if (APP.isDemo) { badge.classList.add('sp-disconnected'); text.textContent = 'Demo mode'; }
+  else if (APP.isConnected) { badge.classList.add('sp-connected'); text.textContent = 'SharePoint live'; }
+  else { badge.classList.add('sp-loading'); text.textContent = 'Connecting…'; }
+}
+
+async function refreshData() {
+  document.getElementById('main-content').innerHTML = '<div class="loading"><div class="spinner"></div> Loading…</div>';
+  await loadAllData();
+  updateProgress();
+  render();
+}
+
+// ─── NAVIGATION ───────────────────────────────────────────────────────────────
+function nav(view, el) {
+  APP.currentView = view;
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+  const titles = { dashboard: 'Dashboard', calendar: 'Close Calendar', je: 'Journal Entries', recon: 'Account Reconciliations', checklist: 'Close Checklist', setup: 'Connection Settings' };
+  document.getElementById('view-title').textContent = titles[view] || view;
+  render();
+}
+
+function render() {
+  const c = document.getElementById('main-content');
+  const v = APP.currentView;
+  if (v === 'dashboard') renderDashboard(c);
+  else if (v === 'je') renderJE(c);
+  else if (v === 'recon') renderRecon(c);
+  else if (v === 'checklist') renderChecklist(c);
+  else if (v === 'calendar') renderCalendar(c);
+  else if (v === 'setup') renderSetup(c);
+}
+
+// ─── PROGRESS ─────────────────────────────────────────────────────────────────
+function updateProgress() {
+  const all = [...APP.data.jes, ...APP.data.recons, ...APP.data.checklist];
+  const done = all.filter(x => x.Status === 'Complete').length;
+  const pct = all.length ? Math.round(done / all.length * 100) : 0;
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = pct + '% complete';
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+const fmt = n => '$' + (n || 0).toLocaleString();
+const avColors = { JS: 'av-blue', AL: 'av-teal', MK: 'av-purple', TW: 'av-coral' };
+const avColor = name => avColors[name] || 'av-green';
+const avHtml = name => `<div class="avatar ${avColor(name)}" title="${name}" style="width:24px;height:24px;font-size:10px;">${name}</div>`;
+
+function statusBadge(s) {
+  const map = { 'Complete': ['b-complete', '✓ Complete'], 'In Review': ['b-review', 'In Review'], 'In Prep': ['b-prep', 'In Prep'], 'Open': ['b-open', 'Open'], 'Overdue': ['b-overdue', 'Overdue'] };
+  const [cls, label] = map[s] || ['b-open', s];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function calChipClass(s) {
+  return { Complete: '#EAF3DE', 'In Review': '#E6F1FB', 'In Prep': '#FAEEDA', Open: '#F1EFE8', Overdue: '#FCEBEB' }[s] || '#F1EFE8';
+}
+function calChipColor(s) {
+  return { Complete: '#3B6D11', 'In Review': '#185FA5', 'In Prep': '#854F0B', Open: '#5F5E5A', Overdue: '#A32D2D' }[s] || '#5F5E5A';
+}
+
+// ─── VIEWS ────────────────────────────────────────────────────────────────────
+function renderDashboard(c) {
+  const all = [...APP.data.jes, ...APP.data.recons, ...APP.data.checklist];
+  const done = all.filter(x => x.Status === 'Complete').length;
+  const overdue = all.filter(x => x.Status === 'Overdue').length;
+  const inReview = [...APP.data.jes, ...APP.data.recons].filter(x => x.Status === 'In Review').length;
+  const variances = APP.data.recons.filter(r => Math.abs((r.GLBalance || 0) - (r.SubBalance || 0)) > 0).length;
+
+  c.innerHTML = `
+  <div class="metrics-grid">
+    <div class="metric-card"><div class="metric-label">Items complete</div><div class="metric-value" style="color:var(--green)">${done}/${all.length}</div><div class="metric-sub">${all.length - done} remaining</div></div>
+    <div class="metric-card"><div class="metric-label">Overdue</div><div class="metric-value" style="color:${overdue>0?'var(--red)':'var(--green)'}">${overdue}</div><div class="metric-sub">Need immediate attention</div></div>
+    <div class="metric-card"><div class="metric-label">Pending review</div><div class="metric-value" style="color:var(--blue)">${inReview}</div><div class="metric-sub">Awaiting sign-off</div></div>
+    <div class="metric-card"><div class="metric-label">Recon variances</div><div class="metric-value" style="color:${variances>0?'var(--amber)':'var(--green)'}">${variances}</div><div class="metric-sub">${variances > 0 ? 'Investigate open items' : 'All balanced'}</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Recent journal entries</span><button class="btn btn-sm" onclick="nav('je',document.querySelector('[data-view=je]'))">View all →</button></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Description</th><th>Amount</th><th>Preparer</th><th>Status</th></tr></thead>
+      <tbody>${APP.data.jes.slice(0,4).map(j => `<tr>
+        <td class="td-main">${j.Description || j.Title || ''}</td>
+        <td>${fmt(j.Amount)}</td>
+        <td>${avHtml(j.Preparer || '')}</td>
+        <td>${statusBadge(j.Status)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Reconciliation variances</span><button class="btn btn-sm" onclick="nav('recon',document.querySelector('[data-view=recon]'))">View all →</button></div>
+    ${APP.data.recons.some(r => Math.abs((r.GLBalance||0)-(r.SubBalance||0)) > 0)
+      ? `<div class="table-wrap"><table>
+          <thead><tr><th>Account</th><th>GL Balance</th><th>Sub Balance</th><th>Variance</th></tr></thead>
+          <tbody>${APP.data.recons.filter(r => Math.abs((r.GLBalance||0)-(r.SubBalance||0)) > 0).map(r => {
+            const v = (r.GLBalance||0)-(r.SubBalance||0);
+            return `<tr><td class="td-main">${r.Account||''}</td><td>${fmt(r.GLBalance)}</td><td>${fmt(r.SubBalance)}</td><td class="var-bad">${fmt(Math.abs(v))} ${v>0?'over':'short'}</td></tr>`;
+          }).join('')}</tbody>
+        </table></div>`
+      : '<div class="empty"><div class="empty-icon">✓</div>All accounts are balanced</div>'
     }
-    // Poll for token in URL fragment
-    const checkInterval=setInterval(()=>{
-      try{
-        if(popup.closed){
-          clearInterval(checkInterval);
-          showToast('Sign-in window closed','error');
-          return;
-        }
-        const hash=popup.location.hash;
-        if(hash&&hash.includes('access_token')){
-          clearInterval(checkInterval);
-          popup.close();
-          const params=new URLSearchParams(hash.substring(1));
-          APP.accessToken=params.get('access_token');
-          APP.tokenExpiry=Date.now()+(parseInt(params.get('expires_in')||'3600')-60)*1000;
-          APP.useSharePoint=true;
-          APP.isDemo=false;
-          saveConfig();
-          updatePill();
-          graphRequest('GET','/me').then(me=>{
-            if(me){APP.userName=me.displayName||APP.userName;APP.userInitials=(me.displayName||APP.userName).split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();}
-            saveConfig();updatePill();
-          }).catch(()=>{});
-          showToast('Connected to SharePoint ✓ Loading your team data…','success');
-          refreshAll();
-        }
-      }catch(e){/* cross-origin - popup still on Microsoft page, keep waiting */}
-    },500);
-    setTimeout(()=>{
-      clearInterval(checkInterval);
-      if(!popup.closed)popup.close();
-    },120000);
-  }catch(e){
-    showToast('Connection failed: '+e.message,'error');
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Overdue items</span></div>
+    ${overdue > 0
+      ? `<div class="table-wrap"><table>
+          <thead><tr><th>Item</th><th>Type</th><th>Owner</th><th>Due</th></tr></thead>
+          <tbody>${[
+            ...APP.data.jes.filter(j=>j.Status==='Overdue').map(j=>({name:j.Description||j.Title,type:'Journal Entry',owner:j.Preparer,due:j.DueDate})),
+            ...APP.data.checklist.filter(t=>t.Status==='Overdue').map(t=>({name:t.Task||t.Title,type:'Checklist',owner:t.Owner,due:t.DueDate}))
+          ].map(i=>`<tr><td class="td-main">${i.name}</td><td style="color:var(--text-muted);font-size:12px;">${i.type}</td><td>${avHtml(i.owner||'')}</td><td><span class="badge b-overdue">${i.due||''}</span></td></tr>`).join('')}</tbody>
+        </table></div>`
+      : '<div class="empty"><div class="empty-icon"></div>No overdue items</div>'
+    }
+  </div>`;
+}
+
+function renderJE(c) {
+  const tab = APP.currentTab.je || 'all';
+  let items = APP.data.jes;
+  if (tab === 'mine') items = items.filter(j => j.Preparer === 'JS');
+  if (tab === 'overdue') items = items.filter(j => j.Status === 'Overdue');
+  if (tab === 'review') items = items.filter(j => j.Status === 'In Review');
+
+  c.innerHTML = `<div class="card">
+    <div class="card-header">
+      <span class="card-title">Journal entries</span>
+      <button class="btn btn-sm btn-primary" onclick="openAddModal('jes')">+ Add entry</button>
+    </div>
+    <div class="tab-row">
+      ${[['all','All ('+APP.data.jes.length+')'],['mine','My items'],['review','In Review'],['overdue','Overdue']].map(([k,l])=>
+        `<div class="tab ${tab===k?'active':''}" onclick="setTab('je','${k}')">${l}</div>`
+      ).join('')}
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Description</th><th>Account</th><th>Amount</th><th>Preparer</th><th>Reviewer</th><th>Due</th><th>Status</th><th></th></tr></thead>
+      <tbody>${items.length ? items.map(j => `<tr>
+        <td class="td-main">${j.Description||j.Title||''}</td>
+        <td style="font-size:12px;color:var(--text-muted);max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${j.Account||''}</td>
+        <td style="font-size:12px;">${fmt(j.Amount)}</td>
+        <td>${avHtml(j.Preparer||'')}</td>
+        <td>${avHtml(j.Reviewer||'')}</td>
+        <td style="font-size:12px;color:var(--text-muted);">${j.DueDate||''}</td>
+        <td>${statusBadge(j.Status)}</td>
+        <td><button class="btn-icon" onclick="editItem('jes',${j.id})">✎</button></td>
+      </tr>`).join('') : '<tr><td colspan="8"><div class="empty">No entries in this view</div></td></tr>'}</tbody>
+    </table></div>
+  </div>`;
+}
+
+function renderRecon(c) {
+  const tab = APP.currentTab.recon || 'all';
+  let items = APP.data.recons;
+  if (tab === 'variances') items = items.filter(r => Math.abs((r.GLBalance||0)-(r.SubBalance||0)) > 0);
+  if (tab === 'pending') items = items.filter(r => !r.SignedReviewer);
+
+  c.innerHTML = `<div class="card">
+    <div class="card-header">
+      <span class="card-title">Account reconciliations</span>
+      <button class="btn btn-sm btn-primary" onclick="openAddModal('recons')">+ Add recon</button>
+    </div>
+    <div class="tab-row">
+      ${[['all','All ('+APP.data.recons.length+')'],['variances','Variances ('+APP.data.recons.filter(r=>Math.abs((r.GLBalance||0)-(r.SubBalance||0))>0).length+')'],['pending','Pending sign-off']].map(([k,l])=>
+        `<div class="tab ${tab===k?'active':''}" onclick="setTab('recon','${k}')">${l}</div>`
+      ).join('')}
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Account</th><th>GL Balance</th><th>Sub Balance</th><th>Variance</th><th>Preparer</th><th>Reviewer</th><th>Status</th><th>Sign-off</th><th></th></tr></thead>
+      <tbody>${items.map(r => {
+        const v = (r.GLBalance||0)-(r.SubBalance||0);
+        return `<tr>
+          <td class="td-main" style="max-width:180px;">${r.Account||r.Title||''}</td>
+          <td style="font-size:12px;">${fmt(r.GLBalance)}</td>
+          <td style="font-size:12px;">${fmt(r.SubBalance)}</td>
+          <td class="${v===0?'var-ok':'var-bad'}">${v===0?'—':fmt(Math.abs(v))}</td>
+          <td>${avHtml(r.Preparer||'')}</td>
+          <td>${avHtml(r.Reviewer||'')}</td>
+          <td>${statusBadge(r.Status)}</td>
+          <td style="display:flex;gap:4px;align-items:center;padding:6px 16px;">
+            <button class="btn-sign ${r.SignedPreparer?'signed':''}" onclick="signOff('recons',${r.id},'P')">${r.SignedPreparer?'✓ Prep':'Sign P'}</button>
+            <button class="btn-sign ${r.SignedReviewer?'signed':''}" onclick="signOff('recons',${r.id},'R')">${r.SignedReviewer?'✓ Rev':'Sign R'}</button>
+          </td>
+          <td><button class="btn-icon" onclick="editItem('recons',${r.id})">✎</button></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>
+  </div>`;
+}
+
+function renderChecklist(c) {
+  const tab = APP.currentTab.checklist || 'all';
+  let items = APP.data.checklist;
+  if (tab === 'mine') items = items.filter(t => t.Owner === 'JS');
+  if (tab === 'overdue') items = items.filter(t => t.Status === 'Overdue');
+
+  const cats = [...new Set(items.map(t => t.Category || 'General'))];
+
+  c.innerHTML = `<div class="card">
+    <div class="card-header">
+      <span class="card-title">Close checklist</span>
+      <button class="btn btn-sm btn-primary" onclick="openAddModal('checklist')">+ Add task</button>
+    </div>
+    <div class="tab-row">
+      ${[['all','All ('+APP.data.checklist.length+')'],['mine','My tasks'],['overdue','Overdue']].map(([k,l])=>
+        `<div class="tab ${tab===k?'active':''}" onclick="setTab('checklist','${k}')">${l}</div>`
+      ).join('')}
+    </div>
+    ${cats.map(cat => {
+      const catItems = items.filter(t => (t.Category||'General') === cat);
+      return `<div class="cat-label">${cat}</div>
+      <table><tbody>${catItems.map(t => `<tr>
+        <td style="width:30px;"><input type="checkbox" ${t.Status==='Complete'?'checked':''} onchange="toggleTask(${t.id})"></td>
+        <td class="${t.Status==='Complete'?'td-main':'td-main'}" style="${t.Status==='Complete'?'text-decoration:line-through;color:var(--text-muted);':''}">${t.Task||t.Title||''}</td>
+        <td>${avHtml(t.Owner||'')}</td>
+        <td style="font-size:12px;color:var(--text-muted);">${t.DueDate||''}</td>
+        <td>${statusBadge(t.Status)}</td>
+        <td><button class="btn-icon" onclick="editItem('checklist',${t.id})">✎</button></td>
+      </tr>`).join('')}</tbody></table>`;
+    }).join('')}
+    ${items.length === 0 ? '<div class="empty">No tasks in this view</div>' : ''}
+  </div>`;
+}
+
+function renderCalendar(c) {
+  const days = [25,26,27,28,29,30,31];
+  const byDay = {};
+  [
+    ...APP.data.jes.map(j=>({name:j.Description||j.Title,status:j.Status,day:parseInt((j.DueDate||'').split(' ')[1])||0})),
+    ...APP.data.checklist.map(t=>({name:t.Task||t.Title,status:t.Status,day:parseInt((t.DueDate||'').split(' ')[1])||0}))
+  ].forEach(item => {
+    if (!byDay[item.day]) byDay[item.day] = [];
+    byDay[item.day].push(item);
+  });
+
+  c.innerHTML = `<div class="card">
+    <div class="card-header"><span class="card-title">Close calendar — ${APP.period}</span></div>
+    <div class="cal-grid">${days.map(d => {
+      const isToday = d === 24;
+      const its = byDay[d] || [];
+      return `<div class="cal-day ${isToday?'today':''}">
+        <div class="cal-day-num">Mar ${d}${isToday?' · Today':''}</div>
+        ${its.map(i => `<div class="cal-item" style="background:${calChipClass(i.status)};color:${calChipColor(i.status)};" title="${i.name}">${i.name.length>20?i.name.slice(0,20)+'…':i.name}</div>`).join('')}
+      </div>`;
+    }).join('')}</div>
+  </div>`;
+}
+
+function renderSetup(c) {
+  c.innerHTML = `<div class="card">
+    <div class="card-header"><span class="card-title">Connection settings</span></div>
+    <div style="padding:20px;">
+      <div style="margin-bottom:18px;">
+        <div class="form-label">Status</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="badge ${APP.isDemo?'b-overdue':APP.isConnected?'b-complete':'b-prep'}">${APP.isDemo?'Demo mode':APP.isConnected?'Connected to SharePoint':'Disconnected'}</span>
+          ${APP.isConnected?`<span style="font-size:12px;color:var(--text-muted);">${APP.spSiteUrl}</span>`:''}
+        </div>
+      </div>
+      <div class="form-row">
+        <label class="form-label">SharePoint site URL</label>
+        <input class="form-input" id="cfg-sp-url" value="${APP.spSiteUrl||''}" placeholder="https://yourcompany.sharepoint.com/sites/Finance">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Close period</label>
+        <input class="form-input" id="cfg-period" value="${APP.period||'Mar 2026'}" placeholder="Mar 2026">
+      </div>
+      <div style="display:flex;gap:10px;margin-top:6px;">
+        <button class="btn btn-primary" onclick="saveSettings()">Save &amp; Reconnect</button>
+        <button class="btn" onclick="clearSettings()">Reset to Demo Mode</button>
+        <button class="btn" onclick="openModal('col-guide-modal')">View SharePoint setup guide</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ─── ACTIONS ──────────────────────────────────────────────────────────────────
+function setTab(view, tab) {
+  APP.currentTab[view] = tab;
+  render();
+}
+
+async function toggleTask(id) {
+  const t = APP.data.checklist.find(x => x.id == id);
+  if (!t) return;
+  const newStatus = t.Status === 'Complete' ? 'Open' : 'Complete';
+  try {
+    await patchItem('checklist', id, { Status: newStatus });
+    updateProgress();
+    render();
+    showToast(newStatus === 'Complete' ? 'Task marked complete' : 'Task reopened', 'success');
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+async function signOff(type, id, role) {
+  const r = APP.data.recons.find(x => x.id == id);
+  if (!r) return;
+  if (role === 'R' && !r.SignedPreparer) { showToast('Preparer must sign off first', 'error'); return; }
+  const fields = role === 'P' ? { SignedPreparer: true } : { SignedReviewer: true, Status: 'Complete' };
+  try {
+    await patchItem('recons', id, fields);
+    updateProgress();
+    render();
+    showToast(role === 'P' ? 'Preparer sign-off recorded' : 'Reviewer sign-off — recon complete', 'success');
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+// ─── FORMS ────────────────────────────────────────────────────────────────────
+function openAddModal(type, editData = null) {
+  APP.formType = type;
+  APP.editId = editData ? editData.id : null;
+  const titles = { jes: 'Add Journal Entry', recons: 'Add Reconciliation', checklist: 'Add Checklist Task' };
+  document.getElementById('add-modal-title').textContent = editData ? 'Edit Item' : titles[type];
+  const b = document.getElementById('add-modal-body');
+  const v = f => editData ? (editData[f] || '') : '';
+
+  if (type === 'jes') {
+    b.innerHTML = `
+      <div class="form-row"><label class="form-label">Description *</label><input class="form-input" id="f-desc" placeholder="e.g. Accrued payroll" value="${v('Description')}"></div>
+      <div class="form-row"><label class="form-label">Account</label><input class="form-input" id="f-acct" placeholder="e.g. 2100 - Accrued Liabilities" value="${v('Account')}"></div>
+      <div class="form-row-2">
+        <div class="form-row"><label class="form-label">Amount (DR=CR)</label><input class="form-input" id="f-amt" type="number" placeholder="0" value="${v('Amount')}"></div>
+        <div class="form-row"><label class="form-label">Due Date</label><input class="form-input" id="f-due" placeholder="Mar 28" value="${v('DueDate')}"></div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-row"><label class="form-label">Preparer (initials)</label><input class="form-input" id="f-prep" placeholder="JS" maxlength="4" value="${v('Preparer')}"></div>
+        <div class="form-row"><label class="form-label">Reviewer (initials)</label><input class="form-input" id="f-rev" placeholder="MK" maxlength="4" value="${v('Reviewer')}"></div>
+      </div>
+      <div class="form-row"><label class="form-label">Status</label>
+        <select class="form-input" id="f-status">
+          ${['Open','In Prep','In Review','Complete','Overdue'].map(s=>`<option ${v('Status')===s?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>`;
+  } else if (type === 'recons') {
+    b.innerHTML = `
+      <div class="form-row"><label class="form-label">Account *</label><input class="form-input" id="f-acct" placeholder="e.g. 1010 - Cash" value="${v('Account')}"></div>
+      <div class="form-row-2">
+        <div class="form-row"><label class="form-label">GL Balance</label><input class="form-input" id="f-gl" type="number" placeholder="0" value="${v('GLBalance')}"></div>
+        <div class="form-row"><label class="form-label">Sub-ledger Balance</label><input class="form-input" id="f-sub" type="number" placeholder="0" value="${v('SubBalance')}"></div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-row"><label class="form-label">Preparer</label><input class="form-input" id="f-prep" placeholder="JS" maxlength="4" value="${v('Preparer')}"></div>
+        <div class="form-row"><label class="form-label">Reviewer</label><input class="form-input" id="f-rev" placeholder="MK" maxlength="4" value="${v('Reviewer')}"></div>
+      </div>
+      <div class="form-row"><label class="form-label">Status</label>
+        <select class="form-input" id="f-status">
+          ${['Open','In Prep','In Review','Complete','Overdue'].map(s=>`<option ${v('Status')===s?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>`;
+  } else {
+    b.innerHTML = `
+      <div class="form-row"><label class="form-label">Task *</label><input class="form-input" id="f-task" placeholder="e.g. Revenue recognition review" value="${v('Task')}"></div>
+      <div class="form-row-2">
+        <div class="form-row"><label class="form-label">Category</label><input class="form-input" id="f-cat" placeholder="e.g. Reporting" value="${v('Category')}"></div>
+        <div class="form-row"><label class="form-label">Owner</label><input class="form-input" id="f-owner" placeholder="JS" maxlength="4" value="${v('Owner')}"></div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-row"><label class="form-label">Due Date</label><input class="form-input" id="f-due" placeholder="Mar 31" value="${v('DueDate')}"></div>
+        <div class="form-row"><label class="form-label">Status</label>
+          <select class="form-input" id="f-status">
+            ${['Open','In Prep','In Review','Complete','Overdue'].map(s=>`<option ${v('Status')===s?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </div>
+      </div>`;
+  }
+  openModal('add-modal');
+}
+
+function editItem(type, id) {
+  const list = APP.data[type];
+  const item = list.find(i => i.id == id);
+  if (item) openAddModal(type, item);
+}
+
+async function submitForm() {
+  const type = APP.formType;
+  let fields = {};
+  try {
+    if (type === 'jes') {
+      const desc = document.getElementById('f-desc')?.value?.trim();
+      if (!desc) { showToast('Description is required', 'error'); return; }
+      fields = { Description: desc, Account: document.getElementById('f-acct')?.value?.trim(), Amount: parseFloat(document.getElementById('f-amt')?.value)||0, DueDate: document.getElementById('f-due')?.value?.trim(), Preparer: document.getElementById('f-prep')?.value?.trim()?.toUpperCase(), Reviewer: document.getElementById('f-rev')?.value?.trim()?.toUpperCase(), Status: document.getElementById('f-status')?.value, Period: APP.period };
+    } else if (type === 'recons') {
+      const acct = document.getElementById('f-acct')?.value?.trim();
+      if (!acct) { showToast('Account is required', 'error'); return; }
+      fields = { Account: acct, GLBalance: parseFloat(document.getElementById('f-gl')?.value)||0, SubBalance: parseFloat(document.getElementById('f-sub')?.value)||0, Preparer: document.getElementById('f-prep')?.value?.trim()?.toUpperCase(), Reviewer: document.getElementById('f-rev')?.value?.trim()?.toUpperCase(), Status: document.getElementById('f-status')?.value, SignedPreparer: false, SignedReviewer: false, Period: APP.period };
+    } else {
+      const task = document.getElementById('f-task')?.value?.trim();
+      if (!task) { showToast('Task description is required', 'error'); return; }
+      fields = { Task: task, Category: document.getElementById('f-cat')?.value?.trim()||'General', Owner: document.getElementById('f-owner')?.value?.trim()?.toUpperCase(), DueDate: document.getElementById('f-due')?.value?.trim(), Status: document.getElementById('f-status')?.value, Period: APP.period };
+    }
+
+    document.getElementById('add-modal-save').textContent = 'Saving…';
+    document.getElementById('add-modal-save').disabled = true;
+    await saveItem(type, fields, APP.editId);
+    closeModal('add-modal');
+    updateProgress();
+    render();
+    showToast(APP.editId ? 'Item updated' : 'Item added', 'success');
+  } catch(e) {
+    showToast('Error saving: ' + e.message, 'error');
+  } finally {
+    const btn = document.getElementById('add-modal-save');
+    if (btn) { btn.textContent = 'Save'; btn.disabled = false; }
   }
 }
 
-
-function switchDemo(){APP.isDemo=true;APP.period=document.getElementById('cfg-period')?.value?.trim()||APP.period;saveConfig();updatePill();refreshAll();}
-
-// FORMS
-function openModal(type,editId=null){
-  APP.formType=type;APP.editId=editId;
-  const data=editId!=null?APP.data[type].find(x=>x.id==editId):null;
-  const v=f=>data?(data[f]??''):'';
-  const titles={jes:'Journal Entry',recons:'Reconciliation',checklist:'Checklist Task'};
-  document.getElementById('modal-title').textContent=(editId?'Edit ':'Add ')+titles[type];
-  const b=document.getElementById('modal-body');
-  const so=['Open','In Prep','In Review','Complete','Overdue'].map(s=>`<option ${v('Status')===s?'selected':''}>${s}</option>`).join('');
-  if(type==='jes')b.innerHTML=`
-    <div class="form-row"><label class="form-label">Description *</label><input class="form-input" id="f-desc" value="${v('Description')}" placeholder="e.g. Accrued payroll"></div>
-    <div class="form-2">
-      <div class="form-row"><label class="form-label">Preparer (initials)</label><input class="form-input" id="f-prep" value="${v('Preparer')}" placeholder="JM" maxlength="4"></div>
-      <div class="form-row"><label class="form-label">Reviewer (initials)</label><input class="form-input" id="f-rev" value="${v('Reviewer')}" placeholder="AL" maxlength="4"></div>
-    </div>
-    <div class="form-2">
-      <div class="form-row"><label class="form-label">Due Date</label><input class="form-input" id="f-due" value="${v('DueDate')}" placeholder="Mar 28"></div>
-      <div class="form-row"><label class="form-label">Status</label><select class="form-input" id="f-status">${so}</select></div>
-    </div>
-    <div class="form-2">
-      <div class="form-row"><label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="f-recurring" ${v('Recurring')?'checked':''} style="width:15px;height:15px;accent-color:var(--teal);"> <span>Recurring entry <span style="font-size:11px;color:var(--muted);font-weight:400;">— repeats each period</span></span></label></div>
-      <div class="form-row"><label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="f-reversing" ${v('Reversing')?'checked':''} onchange="toggleReversingField()" style="width:15px;height:15px;accent-color:#534AB7;"> <span>Reversing entry <span style="font-size:11px;color:var(--muted);font-weight:400;">— reverses next period</span></span></label></div>
-    </div>
-    <div class="form-row"><label class="form-label">Intacct Reference <span style="font-size:11px;color:var(--muted);font-weight:400;">— original JE</span></label><input class="form-input" id="f-ref" value="${v('IntacctReference')}" placeholder="e.g. JE-2026-0312"><div class="form-hint">Paste the JE number from Sage Intacct after posting</div></div>
-    <div class="form-row" id="f-rev-ref-row" style="display:${v('Reversing')?'block':'none'}"><label class="form-label">Reversing Intacct Reference <span style="font-size:11px;color:#534AB7;font-weight:400;">— reversal JE</span></label><input class="form-input" id="f-rev-ref" value="${v('ReversingIntacctReference')}" placeholder="e.g. JE-2026-0318"><div class="form-hint">Paste the reversal JE number once it posts in the next period</div></div>`;
-  else if(type==='recons')b.innerHTML=`
-    <div class="form-row"><label class="form-label">Account *</label><input class="form-input" id="f-acct" value="${v('Account')}" placeholder="e.g. 1010 - Cash"></div>
-    <div class="form-2">
-      <div class="form-row"><label class="form-label">GL Balance</label><input class="form-input" id="f-gl" type="number" value="${v('GLBalance')||0}"></div>
-      <div class="form-row"><label class="form-label">Sub-ledger Balance</label><input class="form-input" id="f-sub" type="number" value="${v('SubBalance')||0}"></div>
-    </div>
-    <div class="form-2">
-      <div class="form-row"><label class="form-label">Preparer</label><input class="form-input" id="f-prep" value="${v('Preparer')}" placeholder="JM" maxlength="4"></div>
-      <div class="form-row"><label class="form-label">Reviewer</label><input class="form-input" id="f-rev" value="${v('Reviewer')}" placeholder="AL" maxlength="4"></div>
-    </div>
-    <div class="form-row"><label class="form-label">Status</label><select class="form-input" id="f-status">${so}</select></div>`;
-  else b.innerHTML=`
-    <div class="form-row"><label class="form-label">Task *</label><input class="form-input" id="f-task" value="${v('Task')}" placeholder="e.g. Revenue recognition review"></div>
-    <div class="form-2">
-      <div class="form-row"><label class="form-label">Category</label><input class="form-input" id="f-cat" value="${v('Category')}" placeholder="e.g. Reporting"></div>
-      <div class="form-row"><label class="form-label">Owner(s)</label><input class="form-input" id="f-owner" value="${v('Owner')}" placeholder="JM or JM, RK, GL"><div class="form-hint">Separate multiple owners with a comma — e.g. JM, RK</div></div>
-    </div>
-    <div class="form-2">
-      <div class="form-row"><label class="form-label">Due Date</label><input class="form-input" id="f-due" value="${v('DueDate')}" placeholder="Mar 31"></div>
-      <div class="form-row"><label class="form-label">Status</label><select class="form-input" id="f-status">${so}</select></div>
-    </div>
-    <div class="form-row"><label class="form-label">Subtasks <span style="font-weight:400;color:var(--muted);font-size:11px;">— separate with | (pipe character)</span></label><textarea class="form-input" id="f-subtasks" rows="3" placeholder="Tie bank statement | Confirm deposits in transit | Confirm outstanding checks" style="resize:vertical;">${v('SubTasks')}</textarea><div style="font-size:11px;color:var(--muted);margin-top:3px;">Each subtask separated by | will appear as a checkbox under the task, just like Planner.</div></div>
-    <div class="form-row"><label class="form-label">Comments <span style="font-weight:400;color:var(--muted);font-size:11px;">— notes, issues, or context for this task</span></label><textarea class="form-input" id="f-comments" rows="3" placeholder="e.g. Waiting on bank to confirm wire details. Follow up with TW by Mar 28." style="resize:vertical;">${v('Comments')}</textarea></div>`;
-  document.getElementById('add-modal').classList.add('open');
+async function saveSettings() {
+  const url = document.getElementById('cfg-sp-url')?.value?.trim();
+  const period = document.getElementById('cfg-period')?.value?.trim() || 'Mar 2026';
+  APP.spSiteUrl = url;
+  APP.period = period;
+  APP.isDemo = !url;
+  APP.siteId = null;
+  APP.listIds = null;
+  localStorage.setItem('ct_config', JSON.stringify({ spSiteUrl: url, period, isDemo: !url }));
+  if (url) {
+    const ok = await signInMsal();
+    APP.isConnected = ok;
+  }
+  updateSpStatus();
+  document.getElementById('sidebar-period').textContent = period;
+  document.getElementById('period-chip').textContent = period;
+  await refreshData();
+  showToast('Settings saved', 'success');
 }
 
-function toggleReversingField(){
-  const checked=document.getElementById('f-reversing')?.checked;
-  const row=document.getElementById('f-rev-ref-row');
-  if(row)row.style.display=checked?'block':'none';
+function clearSettings() {
+  localStorage.removeItem('ct_config');
+  APP.isDemo = true;
+  APP.spSiteUrl = '';
+  APP.isConnected = false;
+  APP.accessToken = null;
+  updateSpStatus();
+  useDemoMode();
 }
 
-async function submitForm(){
-  const type=APP.formType;let fields={};
-  try{
-    if(type==='jes'){
-      const desc=document.getElementById('f-desc')?.value?.trim();
-      if(!desc){showToast('Description is required','error');return;}
-      fields={Description:desc,DueDate:document.getElementById('f-due')?.value?.trim(),Preparer:document.getElementById('f-prep')?.value?.trim()?.toUpperCase(),Reviewer:document.getElementById('f-rev')?.value?.trim()?.toUpperCase(),IntacctReference:document.getElementById('f-ref')?.value?.trim(),ReversingIntacctReference:document.getElementById('f-rev-ref')?.value?.trim()||'',Recurring:document.getElementById('f-recurring')?.checked||false,Reversing:document.getElementById('f-reversing')?.checked||false,Status:document.getElementById('f-status')?.value,Period:APP.period};
-    }else if(type==='recons'){
-      const acct=document.getElementById('f-acct')?.value?.trim();
-      if(!acct){showToast('Account is required','error');return;}
-      fields={Account:acct,GLBalance:parseFloat(document.getElementById('f-gl')?.value)||0,SubBalance:parseFloat(document.getElementById('f-sub')?.value)||0,Preparer:document.getElementById('f-prep')?.value?.trim()?.toUpperCase(),Reviewer:document.getElementById('f-rev')?.value?.trim()?.toUpperCase(),Status:document.getElementById('f-status')?.value,SignedPreparer:false,SignedReviewer:false,Period:APP.period};
-    }else{
-      const task=document.getElementById('f-task')?.value?.trim();
-      if(!task){showToast('Task description is required','error');return;}
-      fields={Task:task,Category:document.getElementById('f-cat')?.value?.trim()||'General',Owner:document.getElementById('f-owner')?.value?.trim()?.toUpperCase(),DueDate:document.getElementById('f-due')?.value?.trim(),Status:document.getElementById('f-status')?.value,SubTasks:document.getElementById('f-subtasks')?.value?.trim(),Comments:document.getElementById('f-comments')?.value?.trim(),Period:APP.period};
-    }
-    const btn=document.getElementById('modal-save');btn.textContent='Saving…';btn.disabled=true;
-    await saveItem(type,fields,APP.editId);
-    closeModal();updateProgress();render();showToast(APP.editId?'Updated':'Saved','success');
-  }catch(e){showToast('Error: '+e.message,'error');}
-  finally{const b=document.getElementById('modal-save');if(b){b.textContent='Save';b.disabled=false;}}
+// ─── MODAL & TOAST ────────────────────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(el => el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); }));
+
+let toastTimer;
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (type ? ' ' + type : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
 }
 
-function closeModal(){document.getElementById('add-modal').classList.remove('open');}
-document.querySelectorAll('.overlay').forEach(el=>el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('open');}));
-
-let toastT;
-function showToast(msg,type=''){
-  const t=document.getElementById('toast');
-  t.textContent=msg;t.className='toast show'+(type?' '+type:'');
-  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),3000);
-}
-
+// Initial view
+window.addEventListener('load', () => {
+  if (!APP.spSiteUrl && !APP.isDemo) {
+    document.getElementById('setup-screen').style.display = 'flex';
+  }
+});
 </script>
 </body>
 </html>
