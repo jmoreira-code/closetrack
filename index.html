@@ -307,6 +307,10 @@ const REAL={
 };
 // INIT
 window.addEventListener('DOMContentLoaded',()=>{
+  initApp();
+});
+
+async function initApp(){
   try{
     const s=localStorage.getItem('ct_v2');
     if(s){
@@ -316,14 +320,17 @@ window.addEventListener('DOMContentLoaded',()=>{
         if(APP.isDemo){launchApp();return;}
         if(APP.accessToken&&APP.tokenExpiry>Date.now()){launchApp();return;}
         if(APP.useSharePoint){
-          refreshToken().then(ok=>ok?launchApp():showSetup()).catch(()=>showSetup());
+          try{
+            const ok=await refreshToken();
+            if(ok){launchApp();}else{APP.useSharePoint=false;showSetup();}
+          }catch(e){APP.useSharePoint=false;showSetup();}
           return;
         }
-      }catch(parseErr){ localStorage.removeItem('ct_v2'); }
+      }catch(parseErr){localStorage.removeItem('ct_v2');}
     }
-    showSetup();
-  }catch(e){ showSetup(); }
-});
+  }catch(e){}
+  showSetup();
+};
 
 function showSetup(){
   document.getElementById('setup-screen').style.display='flex';
