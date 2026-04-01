@@ -471,31 +471,102 @@ async function loadAll(){
   // Try SharePoint first if connected
   if(APP.useSharePoint && APP.accessToken){
     try{
+      document.getElementById('main-content').innerHTML='<div class="loading"><div class="spinner"></div> Loading from SharePoint…</div>';
       const[j,r,c]=await Promise.all([
         getSpItems('CT_JournalEntries'),
         getSpItems('CT_Reconciliations'),
         getSpItems('CT_Checklist')
       ]);
-      APP.data={jes:j,recons:r,checklist:c};
-      showToast('Live data loaded from SharePoint','success');
+      // If SharePoint lists are empty, seed them with real data
+      if(!j.length && !r.length && !c.length){
+        showToast('SharePoint lists are empty — seeding with your real data…','success');
+        await seedSharePoint();
+        return;
+      }
+      // Map SharePoint field names to CloseTrack field names
+      APP.data={
+        jes: j.map(i=>({
+          id:i.id,
+          Description:i.Description||i.Title||'',
+          Preparer:i.Preparer||'',Reviewer:i.Reviewer||'',
+          DueDate:i.DueDate||'',Status:i.Status||'Open',Period:i.Period||APP.period,
+          IntacctReference:i.IntacctReference||'',
+          Recurring:i.Recurring===true||i.Recurring==='Yes'||false,
+          Reversing:i.Reversing===true||i.Reversing==='Yes'||false,
+          ReversingIntacctReference:i.ReversingIntacctReference||''
+        })),
+        recons: r.map(i=>({
+          id:i.id,
+          Account:i.Title||i.Account||'',AccountNo:i.Account||i.AccountNo||'',
+          GLBalance:parseFloat(i.GLBalance)||0,SubBalance:parseFloat(i.SubBalance)||0,
+          Preparer:i.Preparer||'',Reviewer:i.Reviewer||'',
+          Status:i.Status||'Open',Period:i.Period||APP.period,Notes:i.Notes||'',
+          SignedPreparer:i.SignedPreparer===true||i.SignedPreparer==='Yes'||false,
+          SignedReviewer:i.SignedReviewer===true||i.SignedReviewer==='Yes'||false
+        })),
+        checklist: c.map(i=>({
+          id:i.id,
+          Task:i.Task||i.Title||'',Category:i.Category||'General',
+          Owner:i.Owner||'',DueDate:i.DueDate||'',
+          Status:i.Status||'Open',Period:i.Period||APP.period,
+          SubTasks:i.SubTasks||'',Comments:i.Comments||''
+        }))
+      };
+      showToast('Live data loaded from SharePoint ✓','success');
       return;
     }catch(e){
       showToast('SharePoint error — using local data: '+e.message,'error');
       APP.useSharePoint=false;
+      saveConfig();
     }
   }
   // Fall back to local storage
   const stored = loadFromStorage();
   if(!stored.jes.length && !stored.recons.length && !stored.checklist.length){
-    const seed = {
+    APP.data = {
       jes: REAL.jes.map(j=>({...j,Period:APP.period})),
       recons: REAL.recons.map(r=>({...r,Period:APP.period})),
       checklist: REAL.checklist.map(t=>({...t,Period:APP.period}))
     };
-    APP.data = seed;
     saveToStorage();
   } else {
     APP.data = stored;
+  }
+}
+
+async function seedSharePoint(){
+  // Write all real data to SharePoint lists on first connection
+  try{
+    showToast('Writing your data to SharePoint — this takes about 60 seconds…','success');
+    const jes = REAL.jes.map(j=>({...j,Period:APP.period}));
+    const recons = REAL.recons.map(r=>({...r,Period:APP.period}));
+    const checklist = REAL.checklist.map(t=>({...t,Period:APP.period}));
+    // Write in batches to avoid timeout
+    const writeAll = async(type, items) => {
+      const results = [];
+      for(const item of items){
+        try{
+          const {id, ...fields} = item;
+          const created = await createSpItem(SP_LIST[type], fields);
+          results.push(created);
+        }catch(e){ results.push({...item}); }
+      }
+      return results;
+    };
+    const[j,r,c] = await Promise.all([
+      writeAll('jes', jes),
+      writeAll('recons', recons),
+      writeAll('checklist', checklist)
+    ]);
+    APP.data = {jes:j, recons:r, checklist:c};
+    showToast('All data written to SharePoint ✓ Your team can now access it live!','success');
+  }catch(e){
+    showToast('Error seeding SharePoint: '+e.message,'error');
+    APP.data = {
+      jes: REAL.jes.map(j=>({...j,Period:APP.period})),
+      recons: REAL.recons.map(r=>({...r,Period:APP.period})),
+      checklist: REAL.checklist.map(t=>({...t,Period:APP.period}))
+    };
   }
 }
 
@@ -555,11 +626,85 @@ function useDemoMode(){
   saveConfig();launchApp();
 }
 
+async function tryMsalSilent(){
+  try{
+    const msalConfig={auth:{clientId:CLIENT_ID,authority:'https://login.microsoftonline.com/common',redirectUri:window.location.href.split('?')[0].split('#')[0]},cache:{cacheLocation:'localStorage',storeAuthStateInCookie:true}};
+    const msalInstance=new msal.PublicClientApplication(msalConfig);
+    await msalInstance.initialize();
+    APP._msalInstance=msalInstance;
+    const accounts=msalInstance.getAllAccounts();
+    if(accounts.length>0){
+      const result=await msalInstance.acquireTokenSilent({scopes:['Sites.ReadWrite.All','User.Read'],account:accounts[0]});
+      APP.accessToken=result.accessToken;
+      APP.tokenExpiry=Date.now()+3540000;
+      APP.useSharePoint=true;
+      if(!APP.userName||APP.userName==='You'||!APP.userName){
+        APP.userName=accounts[0].name||accounts[0].username||'User';
+        APP.userInitials=(APP.userName).split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+      }
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+
+async function reconnectSharePoint(){
+  try{
+    if(!APP._msalInstance){
+      const msalConfig={auth:{clientId:CLIENT_ID,authority:'https://login.microsoftonline.com/common',redirectUri:window.location.href.split('?')[0].split('#')[0]},cache:{cacheLocation:'localStorage',storeAuthStateInCookie:true}};
+      const msalInstance=new msal.PublicClientApplication(msalConfig);
+      await msalInstance.initialize();
+      APP._msalInstance=msalInstance;
+    }
+    const result=await APP._msalInstance.loginPopup({scopes:['Sites.ReadWrite.All','User.Read']});
+    APP.accessToken=result.accessToken;
+    APP.tokenExpiry=Date.now()+3540000;
+    APP.useSharePoint=true;
+    APP.userName=result.account?.name||APP.userName||'User';
+    APP.userInitials=(APP.userName).split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+    saveConfig();
+    updatePill();
+    // Reload data from SharePoint
+    document.getElementById('main-content').innerHTML='<div class="loading"><div class="spinner"></div> Loading from SharePoint…</div>';
+    await loadAll();
+    updateProgress();
+    render();
+    showToast('Connected to SharePoint!','success');
+  }catch(e){
+    showToast('Sign-in failed: '+e.message,'error');
+  }
+}
+
+function showReconnectBanner(){
+  // Show or hide the reconnect banner based on connection status
+  let banner = document.getElementById('reconnect-banner');
+  if(!banner){
+    banner = document.createElement('div');
+    banner.id = 'reconnect-banner';
+    banner.style.cssText = 'background:#FAEEDA;border-bottom:0.5px solid #EF9F27;padding:8px 20px;display:flex;align-items:center;justify-content:space-between;font-size:13px;color:#854F0B;';
+    banner.innerHTML = `<span>⚠️ <strong>Not connected to SharePoint</strong> — your changes are only visible to you, not your team.</span>
+      <button class="btn btn-sm" onclick="reconnect()" style="background:#854F0B;color:white;border-color:#854F0B;white-space:nowrap;margin-left:12px;">Connect now</button>`;
+    const topbar = document.querySelector('.topbar');
+    if(topbar) topbar.parentNode.insertBefore(banner, topbar);
+  }
+  const isLive = !APP.isDemo && APP.useSharePoint && APP.accessToken;
+  banner.style.display = (!APP.isDemo && !isLive) ? 'flex' : 'none';
+}
+
 async function launchApp(){
   document.getElementById('setup-screen').style.display='none';
   document.getElementById('device-screen').style.display='none';
   document.getElementById('main-app').style.display='flex';
+  // Try silent MSAL token refresh on every launch
+  if(!APP.isDemo){
+    const ok=await tryMsalSilent();
+    if(!ok){
+      APP.useSharePoint=false;
+      APP.accessToken=null;
+    }
+  }
   updatePill();
+  showReconnectBanner();
   const sh=APP.period.replace('January','Jan').replace('February','Feb').replace('March','Mar').replace('April','Apr').replace('May','May').replace('June','Jun').replace('July','Jul').replace('August','Aug').replace('September','Sep').replace('October','Oct').replace('November','Nov').replace('December','Dec');
   document.getElementById('sb-period').textContent=sh;
   document.getElementById('period-chip').textContent=sh;
@@ -792,22 +937,50 @@ function renderCalendar(c){
 }
 
 function renderSettings(c){
+  const isLive = !APP.isDemo && APP.useSharePoint && APP.accessToken;
+  const isLocal = !APP.isDemo && !APP.useSharePoint;
   c.innerHTML=`<div class="card"><div class="card-head"><span class="card-title">Connection settings</span></div>
   <div style="padding:20px;">
-    <div class="form-row"><div class="form-label">Current status</div>
-      <span class="badge ${APP.isDemo?'b-overdue':'b-complete'}">${APP.isDemo?'Demo mode — data not saved to SharePoint':'Connected to SharePoint'}</span>
-      ${!APP.isDemo?`<div style="font-size:12px;color:var(--muted);margin-top:6px;">${APP.spUrl}</div>`:''}
+    <div class="form-row">
+      <div class="form-label">Current status</div>
+      <span class="badge ${APP.isDemo?'b-open':isLive?'b-complete':'b-prep'}">
+        ${APP.isDemo?'Demo mode':''}
+        ${isLive?'✓ SharePoint live — data shared with your team':''}
+        ${isLocal?'Data saved locally — not yet connected to SharePoint':''}
+      </span>
+      ${isLive?`<div style="font-size:12px;color:var(--green);margin-top:6px;">Connected as ${APP.userName} · ${APP.spUrl}</div>`:''}
+      ${isLocal?`<div style="font-size:12px;color:var(--amber);margin-top:6px;">⚠️ Your changes are only visible to you. Connect to SharePoint so your whole team sees the same data.</div>`:''}
     </div>
-    <div class="form-row"><label class="form-label">SharePoint site URL</label><input class="form-input" id="cfg-url" value="${APP.spUrl||'https://eventuswh.sharepoint.com/sites/ConsolidatedEntityMonthEndRecons'}"></div>
-    <div class="form-row"><label class="form-label">Close period</label><input class="form-input" id="cfg-period" value="${APP.period}"></div>
-    <div style="display:flex;gap:10px;margin-top:4px;">
-      <button class="btn btn-primary" onclick="reconnect()">Reconnect to SharePoint</button>
+    <div class="form-row"><label class="form-label">Close period</label><input class="form-input" id="cfg-period" value="${APP.period}">
+      <div class="form-hint">Change this at the start of each new close period</div>
+    </div>
+    <hr style="border:none;border-top:0.5px solid var(--border);margin:16px 0;">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-primary" onclick="reconnect()">
+        ${isLive?'↻ Refresh SharePoint connection':'Connect to SharePoint'}
+      </button>
+      <button class="btn" onclick="savePeriod()">Save period change</button>
       <button class="btn" onclick="switchDemo()">Switch to Demo Mode</button>
     </div>
-    <div class="info-box info-blue" style="margin-top:20px;">
-      <strong>DataBlend integration (coming soon)</strong> — When you're ready, DataBlend will pull GL balances from Sage Intacct and write them directly into your CT_Reconciliations list each month. Your team opens CloseTrack and balances are already there — no manual entry needed.
+    ${!isLive?`<div style="background:var(--blue-lt);border-radius:var(--r);padding:12px 14px;margin-top:16px;font-size:13px;color:var(--blue);">
+      <strong>To connect to SharePoint:</strong> Click <strong>Connect to SharePoint</strong> above. A Microsoft sign-in window will appear. Sign in with your work email. Once connected, your data will be shared with your whole team in real time and the status will show <strong>SharePoint live</strong>.
+      ${APP.isDemo?'':'<br><br>If the popup is blocked, ask IT to whitelist <strong>login.microsoftonline.com</strong> and <strong>graph.microsoft.com</strong> in Zscaler.'}
+    </div>`:''}
+    <div style="background:var(--green-lt);border-radius:var(--r);padding:12px 14px;margin-top:12px;font-size:13px;color:var(--green);">
+      <strong>Power Automate integration (coming soon)</strong> — Once IT provides Power Automate Premium access, GL balances from Sage Intacct will automatically populate your reconciliation accounts at the start of each close period.
     </div>
   </div></div>`;
+}
+
+async function savePeriod(){
+  const p = document.getElementById('cfg-period')?.value?.trim();
+  if(!p) return;
+  APP.period = p;
+  APP.siteId = null;
+  APP.listIds = {};
+  saveConfig();
+  await refreshAll();
+  showToast('Period updated to '+p,'success');
 }
 
 // ACTIONS
@@ -847,15 +1020,39 @@ async function signOff(id,role){
   catch(e){showToast('Error: '+e.message,'error');}
 }
 
-function reconnect(){
-  APP.spUrl=document.getElementById('cfg-url')?.value?.trim()||APP.spUrl;
-  APP.period=document.getElementById('cfg-period')?.value?.trim()||APP.period;
-  APP.accessToken=null;APP.refreshToken=null;APP.siteId=null;APP.listIds={};
-  saveConfig();
-  document.getElementById('main-app').style.display='none';
-  document.getElementById('setup-screen').style.display='flex';
-  if(document.getElementById('sp-url'))document.getElementById('sp-url').value=APP.spUrl;
-  if(document.getElementById('sp-period'))document.getElementById('sp-period').value=APP.period;
+async function reconnect(){
+  APP.spUrl='https://eventuswh.sharepoint.com/sites/ConsolidatedEntityMonthEndRecons';
+  APP.siteId=null;APP.listIds={};
+  try{
+    showToast('Opening Microsoft sign-in…','success');
+    const msalConfig={auth:{clientId:CLIENT_ID,authority:'https://login.microsoftonline.com/common',redirectUri:window.location.href.split('?')[0].split('#')[0]},cache:{cacheLocation:'localStorage',storeAuthStateInCookie:true}};
+    const msalInstance=new msal.PublicClientApplication(msalConfig);
+    await msalInstance.initialize();
+    APP._msalInstance=msalInstance;
+    // Force fresh login to get new token
+    const result=await msalInstance.loginPopup({scopes:['Sites.ReadWrite.All','User.Read'],prompt:'select_account'});
+    APP.accessToken=result.accessToken;
+    APP.tokenExpiry=Date.now()+3540000;
+    APP.useSharePoint=true;
+    APP.isDemo=false;
+    try{
+      const me=await graphRequest('GET','/me');
+      APP.userName=me.displayName||APP.userName;
+      APP.userInitials=(me.displayName||APP.userName).split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+    }catch(e2){}
+    saveConfig();
+    updatePill();
+    showReconnectBanner();
+    showToast('Connected to SharePoint ✓ Loading your team's data…','success');
+    await refreshAll();
+    render();
+  }catch(e){
+    if(e.message&&(e.message.includes('popup')||e.message.includes('block'))){
+      showToast('Popup blocked — ask IT to whitelist login.microsoftonline.com in Zscaler','error');
+    } else {
+      showToast('Connection failed: '+e.message,'error');
+    }
+  }
 }
 
 function switchDemo(){APP.isDemo=true;APP.period=document.getElementById('cfg-period')?.value?.trim()||APP.period;saveConfig();updatePill();refreshAll();}
