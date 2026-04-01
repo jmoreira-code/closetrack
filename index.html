@@ -468,38 +468,55 @@ function parseDue(due) {
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────
 function renderDashboard(c) {
-  var all=[...APP.data.jes,...APP.data.recons,...APP.data.checklist];
+  var jes=APP.data.jes, recons=APP.data.recons, checklist=APP.data.checklist;
+  var all=[...jes,...recons,...checklist];
   var done=all.filter(function(x){return x.Status==='Complete';}).length;
   var overdue=all.filter(function(x){return x.Status==='Overdue';}).length;
-  var inReview=[...APP.data.jes,...APP.data.recons].filter(function(x){return x.Status==='In Review';}).length;
-  var variances=APP.data.recons.filter(function(r){return Math.abs((r.GLBalance||0)-(r.SubBalance||0))>0;}).length;
-  c.innerHTML=
-    '<div class="metrics">'+
-      '<div class="metric"><div class="metric-label">Items complete</div><div class="metric-value" style="color:var(--green)">'+done+'/'+all.length+'</div><div class="metric-sub">'+(all.length-done)+' remaining</div></div>'+
-      '<div class="metric"><div class="metric-label">Overdue</div><div class="metric-value" style="color:'+(overdue>0?'var(--red)':'var(--green)')+'">'+overdue+'</div><div class="metric-sub">Need attention</div></div>'+
-      '<div class="metric"><div class="metric-label">Pending review</div><div class="metric-value" style="color:var(--blue)">'+inReview+'</div><div class="metric-sub">Awaiting sign-off</div></div>'+
-      '<div class="metric"><div class="metric-label">Recon variances</div><div class="metric-value" style="color:'+(variances>0?'var(--amber)':'var(--green)')+'">'+variances+'</div><div class="metric-sub">'+(variances>0?'Investigate':'All balanced')+'</div></div>'+
-    '</div>'+
-    '<div class="card">'+
-      '<div class="card-head"><span class="card-title">Journal entries</span><button class="btn btn-sm" onclick="nav('je',document.querySelector('[data-view=je]'))">View all →</button></div>'+
-      '<div class="tw"><table><thead><tr><th>Description</th><th>Preparer</th><th>Due</th><th>Status</th></tr></thead><tbody>'+
-      APP.data.jes.slice(0,5).map(function(j){
-        return '<tr><td class="td-main">'+j.Description+
-          (j.Recurring?'<span style="font-size:10px;background:var(--teal-lt);color:var(--teal);padding:1px 6px;border-radius:10px;margin-left:6px;">↻ Recurring</span>':'')+
-          (j.Reversing?'<span style="font-size:10px;background:var(--blue-lt);color:var(--blue);padding:1px 6px;border-radius:10px;margin-left:6px;">⇄ Reversing</span>':'')+
-          '</td><td>'+av(j.Preparer)+'</td><td style="font-size:12px;color:var(--muted)">'+j.DueDate+'</td><td>'+badge(j.Status)+'</td></tr>';
-      }).join('')+
-      '</tbody></table></div></div>'+
-    '<div class="card">'+
-      '<div class="card-head"><span class="card-title">Reconciliation variances</span><button class="btn btn-sm" onclick="nav('recon',document.querySelector('[data-view=recon]'))">View all →</button></div>'+
-      (APP.data.recons.some(function(r){return Math.abs((r.GLBalance||0)-(r.SubBalance||0))>0;}) ?
-        '<div class="tw"><table><thead><tr><th>Account</th><th>GL Balance</th><th>Sub Balance</th><th>Variance</th></tr></thead><tbody>'+
-        APP.data.recons.filter(function(r){return Math.abs((r.GLBalance||0)-(r.SubBalance||0))>0;}).slice(0,8).map(function(r){
-          var v=(r.GLBalance||0)-(r.SubBalance||0);
-          return '<tr><td class="td-main">'+r.Account+'</td><td style="font-size:12px">'+fmt(r.GLBalance)+'</td><td style="font-size:12px">'+fmt(r.SubBalance)+'</td><td class="var-bad">'+fmt(Math.abs(v))+' '+(v>0?'over':'short')+'</td></tr>';
-        }).join('')+'</tbody></table></div>' :
-        '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">✓ All accounts balanced</div>'
-      )+'</div>';
+  var inReview=[...jes,...recons].filter(function(x){return x.Status==='In Review';}).length;
+  var variances=recons.filter(function(r){return Math.abs((r.GLBalance||0)-(r.SubBalance||0))>0;}).length;
+
+  var html = '<div class="metrics">';
+  html += '<div class="metric"><div class="metric-label">Items complete</div><div class="metric-value" style="color:var(--green)">'+done+'/'+all.length+'</div><div class="metric-sub">'+(all.length-done)+' remaining</div></div>';
+  html += '<div class="metric"><div class="metric-label">Overdue</div><div class="metric-value" style="color:'+(overdue>0?'var(--red)':'var(--green)')+'">'+overdue+'</div><div class="metric-sub">Need attention</div></div>';
+  html += '<div class="metric"><div class="metric-label">Pending review</div><div class="metric-value" style="color:var(--blue)">'+inReview+'</div><div class="metric-sub">Awaiting sign-off</div></div>';
+  html += '<div class="metric"><div class="metric-label">Recon variances</div><div class="metric-value" style="color:'+(variances>0?'var(--amber)':'var(--green)')+'">'+variances+'</div><div class="metric-sub">'+(variances>0?'Investigate':'All balanced')+'</div></div>';
+  html += '</div>';
+
+  html += '<div class="card">';
+  html += '<div class="card-head"><span class="card-title">Journal entries</span>';
+  html += '<button class="btn btn-sm" id="je-viewall-btn">View all →</button></div>';
+  html += '<div class="tw"><table><thead><tr><th>Description</th><th>Preparer</th><th>Due</th><th>Status</th></tr></thead><tbody>';
+  jes.slice(0,5).forEach(function(j) {
+    html += '<tr><td class="td-main">'+j.Description;
+    if(j.Recurring) html += '<span style="font-size:10px;background:var(--teal-lt);color:var(--teal);padding:1px 6px;border-radius:10px;margin-left:6px;">↻</span>';
+    if(j.Reversing) html += '<span style="font-size:10px;background:var(--blue-lt);color:var(--blue);padding:1px 6px;border-radius:10px;margin-left:6px;">⇄</span>';
+    html += '</td><td>'+av(j.Preparer)+'</td><td style="font-size:12px;color:var(--muted)">'+j.DueDate+'</td><td>'+badge(j.Status)+'</td></tr>';
+  });
+  html += '</tbody></table></div></div>';
+
+  html += '<div class="card">';
+  html += '<div class="card-head"><span class="card-title">Reconciliation variances</span>';
+  html += '<button class="btn btn-sm" id="recon-viewall-btn">View all →</button></div>';
+  var varRecons = recons.filter(function(r){return Math.abs((r.GLBalance||0)-(r.SubBalance||0))>0;});
+  if(varRecons.length > 0) {
+    html += '<div class="tw"><table><thead><tr><th>Account</th><th>GL Balance</th><th>Sub Balance</th><th>Variance</th></tr></thead><tbody>';
+    varRecons.slice(0,8).forEach(function(r) {
+      var v=(r.GLBalance||0)-(r.SubBalance||0);
+      html += '<tr><td class="td-main">'+r.Account+'</td><td style="font-size:12px">'+fmt(r.GLBalance)+'</td><td style="font-size:12px">'+fmt(r.SubBalance)+'</td><td class="var-bad">'+fmt(Math.abs(v))+' '+(v>0?'over':'short')+'</td></tr>';
+    });
+    html += '</tbody></table></div>';
+  } else {
+    html += '<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px;">✓ All accounts balanced</div>';
+  }
+  html += '</div>';
+
+  c.innerHTML = html;
+
+  // Wire up view-all buttons after rendering
+  var jeBtn = document.getElementById('je-viewall-btn');
+  if(jeBtn) jeBtn.onclick = function(){ navTo('je'); };
+  var reconBtn = document.getElementById('recon-viewall-btn');
+  if(reconBtn) reconBtn.onclick = function(){ navTo('recon'); };
 }
 
 // ── JOURNAL ENTRIES ───────────────────────────────────────────────────
@@ -873,6 +890,16 @@ function showToast(msg,type){
   var t=document.getElementById('toast');
   t.textContent=msg;t.className='toast show'+(type?' '+type:'');
   clearTimeout(toastT);toastT=setTimeout(function(){t.classList.remove('show');},3000);
+}
+// data-nav click handler
+document.addEventListener('click', function(e) {
+  var btn = e.target.closest('[data-nav]');
+  if (btn) { navTo(btn.getAttribute('data-nav')); }
+});
+
+function navTo(v) {
+  var el = document.querySelector('[data-view='+v+']');
+  if(el) nav(v, el);
 }
 </script>
 </body>
