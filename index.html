@@ -308,15 +308,22 @@ const REAL={
 };
 // INIT
 window.addEventListener('DOMContentLoaded',()=>{
-  const s=localStorage.getItem('ct_v2');
-  if(s){
-    const c=JSON.parse(s);
-    Object.assign(APP,{spUrl:c.spUrl||'',period:c.period||'March 2026',isDemo:c.isDemo||false,userName:c.userName||'',userInitials:c.userInitials||'U',useSharePoint:c.useSharePoint||false,accessToken:c.accessToken||null,tokenExpiry:c.tokenExpiry||0});
-    if(APP.isDemo){launchApp();return;}
-    if(APP.accessToken&&APP.tokenExpiry>Date.now()){launchApp();return;}
-    if(APP.useSharePoint){refreshToken().then(ok=>ok?launchApp():showSetup());return;}
-  }
-  showSetup();
+  try{
+    const s=localStorage.getItem('ct_v2');
+    if(s){
+      try{
+        const c=JSON.parse(s);
+        Object.assign(APP,{spUrl:c.spUrl||'',period:c.period||'March 2026',isDemo:c.isDemo||false,userName:c.userName||'',userInitials:c.userInitials||'U',useSharePoint:c.useSharePoint||false,accessToken:c.accessToken||null,tokenExpiry:c.tokenExpiry||0});
+        if(APP.isDemo){launchApp();return;}
+        if(APP.accessToken&&APP.tokenExpiry>Date.now()){launchApp();return;}
+        if(APP.useSharePoint){
+          refreshToken().then(ok=>ok?launchApp():showSetup()).catch(()=>showSetup());
+          return;
+        }
+      }catch(parseErr){ localStorage.removeItem('ct_v2'); }
+    }
+    showSetup();
+  }catch(e){ showSetup(); }
 });
 
 function showSetup(){
@@ -401,6 +408,7 @@ function copyCode(){}
 async function refreshToken(){
   if(!APP._msalInstance && APP.useSharePoint){
     try{
+      if(typeof msal==='undefined') return false;
       const msalConfig={auth:{clientId:CLIENT_ID,authority:'https://login.microsoftonline.com/common',redirectUri:window.location.href.split('?')[0].split('#')[0]},cache:{cacheLocation:'localStorage',storeAuthStateInCookie:true}};
       const msalInstance=new msal.PublicClientApplication(msalConfig);
       await msalInstance.initialize();
