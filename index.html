@@ -713,7 +713,6 @@ function renderJE(c){
       <span class="card-title">Journal entries</span>
       <div style="display:flex;align-items:center;gap:8px;">
         ${hasFilters?`<button class="btn btn-sm" style="color:var(--red);border-color:var(--red)" onclick="APP.tabs.jeFilter={};APP.tabs.jeSort='';render()">✕ Clear filters</button>`:''}
-        <button class="btn btn-sm" onclick="importFromIntacct()" style="background:#E1F5EE;color:#0F6E56;border-color:#0F6E56">&#8593; Import Intacct JEs</button>
         <button class="btn btn-sm btn-primary" onclick="openModal('jes')">+ Add entry</button>
       </div>
     </div>
@@ -763,103 +762,23 @@ function renderJE(c){
 
 function renderRecon(c){
   const tab=APP.tabs.recon||'all';
-  const reconSort=APP.tabs.reconSort||'';
-  const reconFilter=APP.tabs.reconFilter||{};
   let items=APP.data.recons;
-
-  // Tab filters
-  if(tab==='variances') items=items.filter(r=>Math.abs((r.GLBalance||0)-(r.SubBalance||0))>0);
-  if(tab==='pending') items=items.filter(r=>!r.SignedReviewer);
-
-  // Column filters
-  if(reconFilter.account) items=items.filter(r=>(r.Account||'').toLowerCase().includes(reconFilter.account.toLowerCase()));
-  if(reconFilter.accountNo) items=items.filter(r=>(r.AccountNo||'').includes(reconFilter.accountNo));
-  if(reconFilter.preparer) items=items.filter(r=>(r.Preparer||'').toLowerCase().includes(reconFilter.preparer.toLowerCase()));
-  if(reconFilter.reviewer) items=items.filter(r=>(r.Reviewer||'').toLowerCase().includes(reconFilter.reviewer.toLowerCase()));
-  if(reconFilter.status) items=items.filter(r=>(r.Status||'').toLowerCase().includes(reconFilter.status.toLowerCase()));
-
-  // Sorting
-  if(reconSort==='acct-asc') items=[...items].sort((a,b)=>(a.Account||'').localeCompare(b.Account||''));
-  if(reconSort==='acct-desc') items=[...items].sort((a,b)=>(b.Account||'').localeCompare(a.Account||''));
-  if(reconSort==='no-asc') items=[...items].sort((a,b)=>parseInt(a.AccountNo||0)-parseInt(b.AccountNo||0));
-  if(reconSort==='no-desc') items=[...items].sort((a,b)=>parseInt(b.AccountNo||0)-parseInt(a.AccountNo||0));
-  if(reconSort==='gl-asc') items=[...items].sort((a,b)=>(a.GLBalance||0)-(b.GLBalance||0));
-  if(reconSort==='gl-desc') items=[...items].sort((a,b)=>(b.GLBalance||0)-(a.GLBalance||0));
-  if(reconSort==='var-asc') items=[...items].sort((a,b)=>Math.abs((a.GLBalance||0)-(a.SubBalance||0))-Math.abs((b.GLBalance||0)-(b.SubBalance||0)));
-  if(reconSort==='var-desc') items=[...items].sort((a,b)=>Math.abs((b.GLBalance||0)-(b.SubBalance||0))-Math.abs((a.GLBalance||0)-(a.SubBalance||0)));
-  if(reconSort==='prep-asc') items=[...items].sort((a,b)=>(a.Preparer||'').localeCompare(b.Preparer||''));
-  if(reconSort==='prep-desc') items=[...items].sort((a,b)=>(b.Preparer||'').localeCompare(a.Preparer||''));
-  if(reconSort==='status-asc') items=[...items].sort((a,b)=>(a.Status||'').localeCompare(b.Status||''));
-  if(reconSort==='status-desc') items=[...items].sort((a,b)=>(b.Status||'').localeCompare(a.Status||''));
-
-  const varCount=APP.data.recons.filter(r=>Math.abs((r.GLBalance||0)-(r.SubBalance||0))>0).length;
-  const hasFilters=Object.values(reconFilter).some(v=>v)||reconSort;
-
-  function sa(field){ return reconSort===field+'-asc'?' ▲':reconSort===field+'-desc'?' ▼':' ⇅'; }
-
-  const tabs=[['all','All ('+APP.data.recons.length+')'],['variances','Variances ('+varCount+')'],['pending','Pending sign-off']];
-
+  if(tab==='variances')items=items.filter(r=>Math.abs((r.GLBalance||0)-(r.SubBalance||0))>0);
+  if(tab==='pending')items=items.filter(r=>!r.SignedReviewer);
   c.innerHTML=`<div class="card">
-    <div class="card-head">
-      <span class="card-title">Account reconciliations</span>
-      <div style="display:flex;align-items:center;gap:8px;">
-        ${hasFilters?`<button class="btn btn-sm" style="color:var(--red);border-color:var(--red)" onclick="APP.tabs.reconFilter={};APP.tabs.reconSort='';render()">✕ Clear filters</button>`:''}
-        <button class="btn btn-sm" onclick="importTBFromIntacct()" style="background:#E1F5EE;color:#0F6E56;border-color:#0F6E56">&#8593; Import GL Balances</button>
-        <button class="btn btn-sm btn-primary" onclick="openModal('recons')">+ Add recon</button>
-      </div>
-    </div>
-    <div class="tab-row">${tabs.map(([k,l])=>`<div class="tab ${tab===k?'active':''}" onclick="setTab('recon','${k}')">${l}</div>`).join('')}</div>
-    <div class="tw"><table>
-    <thead>
-      <tr>
-        <th style="cursor:pointer;user-select:none" onclick="APP.tabs.reconSort=APP.tabs.reconSort==='acct-asc'?'acct-desc':'acct-asc';render()">Account${sa('acct')}</th>
-        <th style="cursor:pointer;user-select:none" onclick="APP.tabs.reconSort=APP.tabs.reconSort==='no-asc'?'no-desc':'no-asc';render()">Acct No${sa('no')}</th>
-        <th style="cursor:pointer;user-select:none" onclick="APP.tabs.reconSort=APP.tabs.reconSort==='gl-asc'?'gl-desc':'gl-asc';render()">GL Balance${sa('gl')}</th>
-        <th>Sub Balance</th>
-        <th style="cursor:pointer;user-select:none" onclick="APP.tabs.reconSort=APP.tabs.reconSort==='var-asc'?'var-desc':'var-asc';render()">Variance${sa('var')}</th>
-        <th style="cursor:pointer;user-select:none" onclick="APP.tabs.reconSort=APP.tabs.reconSort==='prep-asc'?'prep-desc':'prep-asc';render()">Preparer${sa('prep')}</th>
-        <th>Reviewer</th>
-        <th style="cursor:pointer;user-select:none" onclick="APP.tabs.reconSort=APP.tabs.reconSort==='status-asc'?'status-desc':'status-asc';render()">Status${sa('status')}</th>
-        <th>Sign-off</th>
-        <th></th>
-      </tr>
-      <tr style="background:var(--bg)">
-        <td><input class="form-input" style="font-size:11px;padding:3px 6px" placeholder="Filter..." value="${reconFilter.account||''}" oninput="APP.tabs.reconFilter=Object.assign(APP.tabs.reconFilter||{},{account:this.value});render()"></td>
-        <td><input class="form-input" style="font-size:11px;padding:3px 6px" placeholder="Filter..." value="${reconFilter.accountNo||''}" oninput="APP.tabs.reconFilter=Object.assign(APP.tabs.reconFilter||{},{accountNo:this.value});render()"></td>
-        <td></td>
-        <td></td>
-        <td></td>
-        <td><input class="form-input" style="font-size:11px;padding:3px 6px" placeholder="Filter..." value="${reconFilter.preparer||''}" oninput="APP.tabs.reconFilter=Object.assign(APP.tabs.reconFilter||{},{preparer:this.value});render()"></td>
-        <td><input class="form-input" style="font-size:11px;padding:3px 6px" placeholder="Filter..." value="${reconFilter.reviewer||''}" oninput="APP.tabs.reconFilter=Object.assign(APP.tabs.reconFilter||{},{reviewer:this.value});render()"></td>
-        <td><select class="form-input" style="font-size:11px;padding:3px 6px" onchange="APP.tabs.reconFilter=Object.assign(APP.tabs.reconFilter||{},{status:this.value});render()">
-          <option value="">All</option>
-          ${['Open','In Review','Complete','Overdue'].map(s=>`<option value="${s}" ${reconFilter.status===s?'selected':''}>${s}</option>`).join('')}
-        </select></td>
-        <td></td>
-        <td></td>
-      </tr>
-    </thead>
-    <tbody>${items.length?items.map(r=>{
-      const v=(r.GLBalance||0)-(r.SubBalance||0);
-      return `<tr>
-        <td class="td-main" style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.Account||''}</td>
-        <td style="font-size:12px;color:var(--muted)">${r.AccountNo||''}</td>
-        <td style="font-size:12px">${fmt(r.GLBalance)}</td>
-        <td style="font-size:12px">${fmt(r.SubBalance)}</td>
-        <td class="${v===0?'var-ok':'var-bad'}">${v===0?'—':fmt(Math.abs(v))}</td>
-        <td>${av(r.Preparer||'')}</td>
-        <td>${av(r.Reviewer||'')}</td>
-        <td>${badge(r.Status)}</td>
-        <td style="display:flex;gap:4px;align-items:center;padding:6px 16px">
-          <button class="btn-sign ${r.SignedPreparer?'signed':''}" onclick="signOff(${JSON.stringify(r.id)},'P')">${r.SignedPreparer?'✓ Prep':'Sign P'}</button>
-          <button class="btn-sign ${r.SignedReviewer?'signed':''}" onclick="signOff(${JSON.stringify(r.id)},'R')">${r.SignedReviewer?'✓ Rev':'Sign R'}</button>
-        </td>
-        <td><button class="btn-icon" onclick="openModal('recons',${JSON.stringify(r.id)})">✎</button></td>
-      </tr>`;
-    }).join(''):'<tr><td colspan="10"><div style="padding:20px;text-align:center;color:var(--muted)">No accounts match your filters</div></td></tr>'}
-    </tbody></table></div>
-    ${items.length>0?`<div style="padding:8px 16px;font-size:11px;color:var(--muted)">Showing ${items.length} of ${APP.data.recons.length} accounts</div>`:''}
-  </div>`;
+    <div class="card-head"><span class="card-title">Account reconciliations</span><button class="btn btn-sm btn-primary" onclick="openModal('recons')">+ Add recon</button></div>
+    <div class="tab-row">${[['all','All ('+APP.data.recons.length+')'],['variances','Variances'],['pending','Pending sign-off']].map(([k,l])=>`<div class="tab ${tab===k?'active':''}" onclick="setTab('recon','${k}')">${l}</div>`).join('')}</div>
+    <div class="tw"><table><thead><tr><th>Account</th><th>GL Balance</th><th>Sub Balance</th><th>Variance</th><th>Preparer</th><th>Reviewer</th><th>Status</th><th>Sign-off</th><th></th></tr></thead>
+    <tbody>${items.map(r=>{const v=(r.GLBalance||0)-(r.SubBalance||0);return`<tr><td class="td-main" style="max-width:170px;">${r.Account||''}</td><td style="font-size:12px;">${fmt(r.GLBalance)}</td><td style="font-size:12px;">${fmt(r.SubBalance)}</td><td class="${v===0?'var-ok':'var-bad'}">${v===0?'—':fmt(Math.abs(v))}</td><td>${av(r.Preparer||'')}</td><td>${av(r.Reviewer||'')}</td><td>${badge(r.Status)}</td><td style="display:flex;gap:4px;align-items:center;padding:6px 16px;"><button class="btn-sign ${r.SignedPreparer?'signed':''}" onclick="signOff(${JSON.stringify(r.id)},'P')">${r.SignedPreparer?'✓ Prep':'Sign P'}</button><button class="btn-sign ${r.SignedReviewer?'signed':''}" onclick="signOff(${JSON.stringify(r.id)},'R')">${r.SignedReviewer?'✓ Rev':'Sign R'}</button></td><td><button class="btn-icon" onclick="openModal('recons',${JSON.stringify(r.id)})">✎</button></td></tr>`;}).join('')}</tbody>
+    </table></div></div>`;
+}
+
+function parseDue(due){
+  if(!due||!due.trim()) return new Date('9999-12-31');
+  const months={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  const m=due.match(/([A-Za-z]+)\s*(\d+)/);
+  if(m){const mo=months[m[1]];if(mo!==undefined)return new Date(2026,mo,parseInt(m[2]));}
+  return new Date(due)||new Date('9999-12-31');
 }
 
 function renderChecklist(c){
@@ -1179,134 +1098,6 @@ function mergeList(currentList, incomingList) {
     }
   });
   return merged;
-}
-
-
-// ── INTACCT IMPORT ────────────────────────────────────────────────────
-function importFromIntacct() {
-  var input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.xls,.xlsx,.html';
-  input.multiple = true;
-  input.onchange = function(e) {
-    var files = Array.from(e.target.files);
-    if (!files.length) return;
-    showToast('Reading ' + files.length + ' file(s)...', 'success');
-    var promises = files.map(function(file) { return readIntacctFile(file); });
-    Promise.all(promises).then(function(results) {
-      var jeCount = 0, reconCount = 0;
-      results.forEach(function(r) {
-        if (r.type === 'je') { r.jes.forEach(function(je) { mergeJE(je); jeCount++; }); }
-        else if (r.type === 'tb') { r.accounts.forEach(function(acc) { updateReconBalance(acc); reconCount++; }); }
-      });
-      if (!APP.isDemo) saveToStorage();
-      updateProgress(); render();
-      showToast('Updated ' + jeCount + ' JEs and ' + reconCount + ' recon balances', 'success');
-    }).catch(function(err) { showToast('Error: ' + err.message, 'error'); });
-  };
-  input.click();
-}
-
-function importTBFromIntacct() {
-  var input = document.createElement('input');
-  input.type = 'file';
-  input.accept = '.xls,.xlsx,.html';
-  input.onchange = function(e) {
-    var file = e.target.files[0];
-    if (!file) return;
-    readIntacctFile(file).then(function(r) {
-      if (r.type !== 'tb') { showToast('Please select a Trial Balance report', 'error'); return; }
-      var count = 0;
-      r.accounts.forEach(function(acc) { if(updateReconBalance(acc)) count++; });
-      if (!APP.isDemo) saveToStorage();
-      render();
-      showToast('Updated GL balances for ' + count + ' accounts', 'success');
-    }).catch(function(err) { showToast('Error: ' + err.message, 'error'); });
-  };
-  input.click();
-}
-
-function readIntacctFile(file) {
-  return new Promise(function(resolve, reject) {
-    var reader = new FileReader();
-    reader.onload = function(ev) {
-      try {
-        var html = ev.target.result;
-        var parser = new DOMParser();
-        var doc = parser.parseFromString(html, 'text/html');
-        var tables = doc.querySelectorAll('table');
-        if (!tables.length) { reject(new Error('No tables in ' + file.name)); return; }
-        var rows = Array.from(tables[0].querySelectorAll('tr')).map(function(tr) {
-          return Array.from(tr.querySelectorAll('td,th')).map(function(td) { return td.textContent.trim(); });
-        });
-        var fullText = rows.slice(0,10).map(function(r){return r.join(' ');}).join(' ');
-        if (fullText.includes('Trial balance')) { resolve({ type: 'tb', accounts: parseTBRows(rows) }); }
-        else if (fullText.includes('Journal report') || fullText.includes('Journal Report')) { resolve({ type: 'je', jes: parseJERows(rows) }); }
-        else { reject(new Error('Unrecognized report: ' + file.name + '. Expected Journal report or Trial balance report.')); }
-      } catch(err) { reject(err); }
-    };
-    reader.readAsText(file);
-  });
-}
-
-function parseJERows(rows) {
-  var jes = [];
-  var dateRe = /^\d{2}\/\d{2}\/\d{4}$/;
-  for (var i = 0; i < rows.length; i++) {
-    var r = rows[i];
-    var date = (r[0]||'').trim();
-    var doc = (r[1]||'').trim();
-    var memo = (r[2]||'').trim();
-    if (!dateRe.test(date)) continue;
-    if (!doc || doc.includes('Total')) continue;
-    jes.push({ Date: date, IntacctReference: doc, Description: memo,
-      Reversing: memo.toLowerCase().startsWith('reversed') });
-  }
-  return jes;
-}
-
-function parseTBRows(rows) {
-  var accounts = [];
-  for (var i = 0; i < rows.length; i++) {
-    var r = rows[i];
-    var acctNo = (r[0]||'').toString().replace(/\.0$/,'').trim();
-    if (!acctNo || acctNo.length < 4 || !/^\d+$/.test(acctNo)) continue;
-    var closing = (r[7]||r[3]||'0').toString().trim();
-    var negative = closing.startsWith('(');
-    var bal = parseFloat(closing.replace(/,/g,'').replace(/[()]/g,'')) || 0;
-    if (negative) bal = -bal;
-    accounts.push({ AccountNo: acctNo, GLBalance: bal });
-  }
-  return accounts;
-}
-
-function mergeJE(importedJE) {
-  var existing = APP.data.jes.find(function(j) {
-    return j.IntacctReference && j.IntacctReference === importedJE.IntacctReference;
-  });
-  if (existing) { if (!existing.IntacctReference) existing.IntacctReference = importedJE.IntacctReference; return; }
-  var descMatch = APP.data.jes.find(function(j) {
-    var a = (j.Description||'').toLowerCase().slice(0,25);
-    var b = (importedJE.Description||'').toLowerCase().slice(0,25);
-    return a.length > 5 && (a === b || b.includes(a) || a.includes(b));
-  });
-  if (descMatch) { if (!descMatch.IntacctReference) descMatch.IntacctReference = importedJE.IntacctReference; return; }
-  APP.data.jes.push({
-    id: Date.now() + Math.random(),
-    Description: importedJE.Description,
-    IntacctReference: importedJE.IntacctReference,
-    DueDate: '', Preparer: '', Reviewer: '',
-    Status: 'Open', Period: APP.period,
-    Recurring: false, Reversing: importedJE.Reversing || false
-  });
-}
-
-function updateReconBalance(imported) {
-  var recon = APP.data.recons.find(function(r) {
-    return r.AccountNo && r.AccountNo.toString() === imported.AccountNo.toString();
-  });
-  if (recon) { recon.GLBalance = imported.GLBalance; return true; }
-  return false;
 }
 
 
