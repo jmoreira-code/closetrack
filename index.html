@@ -655,37 +655,109 @@ function renderDashboard(c){
 
 function renderJE(c){
   const tab=APP.tabs.je||'all';
+  const jeSort=APP.tabs.jeSort||'';
+  const jeFilter=APP.tabs.jeFilter||{};
   let items=APP.data.jes;
-  if(tab==='mine')items=items.filter(j=>j.Preparer==='JM');
+
+  // Tab filters
+  if(tab==='mine')items=items.filter(j=>j.Preparer===APP.userInitials);
   if(tab==='review')items=items.filter(j=>j.Status==='In Review');
   if(tab==='overdue')items=items.filter(j=>j.Status==='Overdue');
   if(tab==='noref')items=items.filter(j=>j.Status==='Complete'&&!j.IntacctReference);
   if(tab==='recurring')items=items.filter(j=>j.Recurring);
   if(tab==='reversing')items=items.filter(j=>j.Reversing);
+
+  // Column filters
+  if(jeFilter.description) items=items.filter(j=>(j.Description||'').toLowerCase().includes(jeFilter.description.toLowerCase()));
+  if(jeFilter.preparer) items=items.filter(j=>(j.Preparer||'').toLowerCase().includes(jeFilter.preparer.toLowerCase()));
+  if(jeFilter.reviewer) items=items.filter(j=>(j.Reviewer||'').toLowerCase().includes(jeFilter.reviewer.toLowerCase()));
+  if(jeFilter.dueDate) items=items.filter(j=>(j.DueDate||'').toLowerCase().includes(jeFilter.dueDate.toLowerCase()));
+  if(jeFilter.status) items=items.filter(j=>(j.Status||'').toLowerCase().includes(jeFilter.status.toLowerCase()));
+
+  // Sorting
+  if(jeSort==='desc-asc') items=[...items].sort((a,b)=>(a.Description||'').localeCompare(b.Description||''));
+  if(jeSort==='desc-desc') items=[...items].sort((a,b)=>(b.Description||'').localeCompare(a.Description||''));
+  if(jeSort==='prep-asc') items=[...items].sort((a,b)=>(a.Preparer||'').localeCompare(b.Preparer||''));
+  if(jeSort==='prep-desc') items=[...items].sort((a,b)=>(b.Preparer||'').localeCompare(a.Preparer||''));
+  if(jeSort==='rev-asc') items=[...items].sort((a,b)=>(a.Reviewer||'').localeCompare(b.Reviewer||''));
+  if(jeSort==='rev-desc') items=[...items].sort((a,b)=>(b.Reviewer||'').localeCompare(a.Reviewer||''));
+  if(jeSort==='due-asc') items=[...items].sort((a,b)=>parseDue(a.DueDate)-parseDue(b.DueDate));
+  if(jeSort==='due-desc') items=[...items].sort((a,b)=>parseDue(b.DueDate)-parseDue(a.DueDate));
+  if(jeSort==='status-asc') items=[...items].sort((a,b)=>(a.Status||'').localeCompare(b.Status||''));
+  if(jeSort==='status-desc') items=[...items].sort((a,b)=>(b.Status||'').localeCompare(a.Status||''));
+
   const recurCount=APP.data.jes.filter(j=>j.Recurring).length;
   const revCount=APP.data.jes.filter(j=>j.Reversing).length;
+
+  // Sort indicator helper
+  function sortArrow(field){
+    if(jeSort===field+'-asc') return ' ▲';
+    if(jeSort===field+'-desc') return ' ▼';
+    return ' ⇅';
+  }
+  function toggleSort(field){
+    APP.tabs.jeSort = jeSort===field+'-asc' ? field+'-desc' : field+'-asc';
+    render();
+  }
+  function clearFilters(){
+    APP.tabs.jeFilter={};
+    APP.tabs.jeSort='';
+    render();
+  }
+
+  const hasFilters = Object.values(jeFilter).some(v=>v) || jeSort;
+  const tabs=[['all','All ('+APP.data.jes.length+')'],['mine','My items'],['review','In Review'],['overdue','Overdue'],['noref','Missing Ref'],['recurring','↻ Recurring ('+recurCount+')'],['reversing','⇄ Reversing ('+revCount+')']];
+
   c.innerHTML=`<div class="card">
-    <div class="card-head"><span class="card-title">Journal entries</span><button class="btn btn-sm btn-primary" onclick="openModal('jes')">+ Add entry</button></div>
-    <div class="tab-row">${[['all','All ('+APP.data.jes.length+')'],['mine','My items'],['review','In Review'],['overdue','Overdue'],['noref','Missing Ref'],['recurring','↻ Recurring ('+recurCount+')'],['reversing','⇄ Reversing ('+revCount+')']].map(([k,l])=>`<div class="tab ${tab===k?'active':''}" onclick="setTab('je','${k}')">${l}</div>`).join('')}</div>
-    <div class="tw"><table><thead><tr><th>Description</th><th>Intacct Reference</th><th>Preparer</th><th>Reviewer</th><th>Due</th><th>Status</th><th></th></tr></thead>
+    <div class="card-head">
+      <span class="card-title">Journal entries</span>
+      <div style="display:flex;align-items:center;gap:8px;">
+        ${hasFilters?`<button class="btn btn-sm" style="color:var(--red);border-color:var(--red)" onclick="APP.tabs.jeFilter={};APP.tabs.jeSort='';render()">✕ Clear filters</button>`:''}
+        <button class="btn btn-sm btn-primary" onclick="openModal('jes')">+ Add entry</button>
+      </div>
+    </div>
+    <div class="tab-row">${tabs.map(([k,l])=>`<div class="tab ${tab===k?'active':''}" onclick="setTab('je','${k}')">${l}</div>`).join('')}</div>
+    <div class="tw"><table>
+    <thead>
+      <tr>
+        <th style="cursor:pointer;user-select:none" onclick="APP.tabs.jeSort=APP.tabs.jeSort==='desc-asc'?'desc-desc':'desc-asc';render()">Description${sortArrow('desc')}</th>
+        <th>Intacct Ref</th>
+        <th style="cursor:pointer;user-select:none" onclick="APP.tabs.jeSort=APP.tabs.jeSort==='prep-asc'?'prep-desc':'prep-asc';render()">Preparer${sortArrow('prep')}</th>
+        <th style="cursor:pointer;user-select:none" onclick="APP.tabs.jeSort=APP.tabs.jeSort==='rev-asc'?'rev-desc':'rev-asc';render()">Reviewer${sortArrow('rev')}</th>
+        <th style="cursor:pointer;user-select:none" onclick="APP.tabs.jeSort=APP.tabs.jeSort==='due-asc'?'due-desc':'due-asc';render()">Due${sortArrow('due')}</th>
+        <th style="cursor:pointer;user-select:none" onclick="APP.tabs.jeSort=APP.tabs.jeSort==='status-asc'?'status-desc':'status-asc';render()">Status${sortArrow('status')}</th>
+        <th></th>
+      </tr>
+      <tr style="background:var(--bg)">
+        <td><input class="form-input" style="font-size:11px;padding:3px 6px" placeholder="Filter..." value="${jeFilter.description||''}" oninput="APP.tabs.jeFilter=Object.assign(APP.tabs.jeFilter||{},{description:this.value});render()"></td>
+        <td></td>
+        <td><input class="form-input" style="font-size:11px;padding:3px 6px" placeholder="Filter..." value="${jeFilter.preparer||''}" oninput="APP.tabs.jeFilter=Object.assign(APP.tabs.jeFilter||{},{preparer:this.value});render()"></td>
+        <td><input class="form-input" style="font-size:11px;padding:3px 6px" placeholder="Filter..." value="${jeFilter.reviewer||''}" oninput="APP.tabs.jeFilter=Object.assign(APP.tabs.jeFilter||{},{reviewer:this.value});render()"></td>
+        <td><input class="form-input" style="font-size:11px;padding:3px 6px" placeholder="Filter..." value="${jeFilter.dueDate||''}" oninput="APP.tabs.jeFilter=Object.assign(APP.tabs.jeFilter||{},{dueDate:this.value});render()"></td>
+        <td><select class="form-input" style="font-size:11px;padding:3px 6px" onchange="APP.tabs.jeFilter=Object.assign(APP.tabs.jeFilter||{},{status:this.value});render()">
+          <option value="">All</option>
+          ${['Open','In Review','Complete','Overdue'].map(s=>`<option value="${s}" ${jeFilter.status===s?'selected':''}>${s}</option>`).join('')}
+        </select></td>
+        <td></td>
+      </tr>
+    </thead>
     <tbody>${items.length?items.map(j=>`<tr>
       <td class="td-main">${j.Description||''}
         <div style="display:flex;gap:4px;margin-top:3px;">
-          ${j.Recurring?'<span style="font-size:10px;background:#E1F5EE;color:#0F6E56;padding:1px 6px;border-radius:10px;font-weight:500;">↻ Recurring</span>':''}
-          ${j.Reversing?'<span style="font-size:10px;background:#EEEDFE;color:#3C3489;padding:1px 6px;border-radius:10px;font-weight:500;">⇄ Reversing</span>':''}
+          ${j.Recurring?'<span style="font-size:10px;background:var(--teal-lt,#E1F5EE);color:var(--teal,#0F6E56);padding:1px 6px;border-radius:10px;font-weight:500;">↻ Recurring</span>':''}
+          ${j.Reversing?'<span style="font-size:10px;background:var(--blue-lt,#E6F1FB);color:var(--blue,#185FA5);padding:1px 6px;border-radius:10px;font-weight:500;">⇄ Reversing</span>':''}
         </div>
       </td>
-      <td style="font-size:12px;color:${j.IntacctReference?'var(--green)':'var(--hint)'};">${j.IntacctReference||'—'}
-        ${j.Reversing&&j.ReversingIntacctReference?`<div style="font-size:11px;color:#3C3489;margin-top:2px;">Rev: ${j.ReversingIntacctReference}</div>`:''}
-        ${j.Reversing&&!j.ReversingIntacctReference&&j.IntacctReference?'<div style="font-size:11px;color:var(--hint);margin-top:2px;">Rev: pending</div>':''}
-      </td>
+      <td style="font-size:12px;color:${j.IntacctReference?'var(--green,#3B6D11)':'var(--hint,#9b9a96)'}">${j.IntacctReference||'—'}</td>
       <td>${av(j.Preparer||'')}</td>
       <td>${av(j.Reviewer||'')}</td>
-      <td style="font-size:12px;color:var(--muted);">${j.DueDate||''}</td>
+      <td style="font-size:12px;color:var(--muted,#6b6a66);white-space:nowrap">${j.DueDate||''}</td>
       <td>${badge(j.Status)}</td>
       <td><button class="btn-icon" onclick="openModal('jes',${JSON.stringify(j.id)})">✎</button></td>
-    </tr>`).join(''):'<tr><td colspan="7"><div class="empty">No entries in this view</div></td></tr>'}</tbody>
-    </table></div></div>`;
+    </tr>`).join(''):'<tr><td colspan="7"><div style="padding:20px;text-align:center;color:var(--muted)">No entries match your filters</div></td></tr>'}
+    </tbody></table></div>
+    ${items.length>0?`<div style="padding:8px 16px;font-size:11px;color:var(--muted)">Showing ${items.length} of ${APP.data.jes.length} entries</div>`:''}
+  </div>`;
 }
 
 function renderRecon(c){
@@ -806,7 +878,7 @@ function renderSettings(c){
         <button class="btn btn-primary" onclick="exportData()">⬇ Export my data</button>
         <button class="btn" onclick="importData()">⬆ Import teammate data</button>
       </div>
-      <div style="font-size:11px;color:var(--muted);margin-top:6px;">Export sends a .json file. Share with Jennifer to merge. Import combines a teammate's updates into your copy.</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">Export sends a .json file. Email to Jennifer to merge. Import combines a teammate's updates into your copy.</div>
     </div>
     <div style="display:flex;gap:10px;margin-top:4px;">
       <button class="btn btn-primary" onclick="reconnect()">Reconnect to SharePoint</button>
@@ -966,7 +1038,7 @@ function exportData() {
   var url = URL.createObjectURL(blob);
   var a = document.createElement('a');
   a.href = url;
-  a.download = 'CloseTrack_' + APP.userName.replace(/ /g,'_') + '_' + APP.period.replace(/ /g,'_') + '.json';
+  a.download = 'CloseTrack_' + (APP.userName||'User').replace(/ /g,'_') + '_' + (APP.period||'').replace(/ /g,'_') + '.json';
   a.click();
   URL.revokeObjectURL(url);
   showToast('Data exported successfully', 'success');
@@ -984,16 +1056,12 @@ function importData() {
       try {
         var imported = JSON.parse(ev.target.result);
         if (!imported.data) { showToast('Invalid file format', 'error'); return; }
-        // Merge: update existing items and add new ones
-        var merged = mergeData(APP.data, imported.data);
-        APP.data = merged;
-        if (imported.subTaskState) {
-          Object.assign(APP.subTaskState, imported.subTaskState);
-        }
+        APP.data = mergeData(APP.data, imported.data);
+        if (imported.subTaskState) Object.assign(APP.subTaskState, imported.subTaskState);
         if (!APP.isDemo) saveToStorage();
         updateProgress();
         render();
-        showToast('Imported data from ' + (imported.userName || 'team member') + ' ✓', 'success');
+        showToast('Imported data from ' + (imported.userName || 'teammate') + ' ✓', 'success');
       } catch(err) {
         showToast('Error reading file: ' + err.message, 'error');
       }
@@ -1004,33 +1072,28 @@ function importData() {
 }
 
 function mergeData(current, incoming) {
-  var result = {
+  return {
     jes: mergeList(current.jes, incoming.jes || []),
     recons: mergeList(current.recons, incoming.recons || []),
     checklist: mergeList(current.checklist, incoming.checklist || [])
   };
-  return result;
 }
 
 function mergeList(currentList, incomingList) {
   var merged = currentList.map(function(item) { return Object.assign({}, item); });
   incomingList.forEach(function(inItem) {
-    var existing = merged.findIndex(function(x) { return x.id == inItem.id; });
-    if (existing >= 0) {
-      // Take the incoming update if status has progressed
+    var idx = merged.findIndex(function(x) { return x.id == inItem.id; });
+    if (idx >= 0) {
       var statusOrder = {'Open':0,'In Prep':1,'In Review':2,'Complete':3,'Overdue':0};
-      var currentStatus = statusOrder[merged[existing].Status] || 0;
-      var incomingStatus = statusOrder[inItem.Status] || 0;
-      if (incomingStatus > currentStatus || inItem.IntacctReference || inItem.SignedPreparer || inItem.SignedReviewer) {
-        merged[existing] = Object.assign({}, merged[existing], {
-          Status: incomingStatus >= currentStatus ? inItem.Status : merged[existing].Status,
-          IntacctReference: inItem.IntacctReference || merged[existing].IntacctReference,
-          SignedPreparer: inItem.SignedPreparer || merged[existing].SignedPreparer,
-          SignedReviewer: inItem.SignedReviewer || merged[existing].SignedReviewer
-        });
-      }
+      var curS = statusOrder[merged[idx].Status] || 0;
+      var inS = statusOrder[inItem.Status] || 0;
+      merged[idx] = Object.assign({}, merged[idx], {
+        Status: inS >= curS ? inItem.Status : merged[idx].Status,
+        IntacctReference: inItem.IntacctReference || merged[idx].IntacctReference,
+        SignedPreparer: inItem.SignedPreparer || merged[idx].SignedPreparer,
+        SignedReviewer: inItem.SignedReviewer || merged[idx].SignedReviewer
+      });
     } else {
-      // New item not in current list - add it
       merged.push(Object.assign({}, inItem));
     }
   });
